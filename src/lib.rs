@@ -100,3 +100,17 @@ impl Player {
         }
     }
 }
+
+// define test module, annotated with cfg attribute for conditional compilation,
+// excluding tests when building the package
+#[cfg(test)]
+mod tests {
+    use super::*; // bring private functions into scope
+
+    #[test]
+    fn test_generate_deck_number_of_cards() {
+        let deck = generate_deck();
+        let n_cards = deck.len();
+        assert_eq!(n_cards, 108);
+    }
+}
