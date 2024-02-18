@@ -4,8 +4,6 @@ use strum::IntoEnumIterator; // import trait created by EnumIter macro into scop
 use strum_macros::EnumIter;
 
 pub fn run() {
-    println!("Hello, world!");
-
     let players = generate_players();
     println!("{:?}", players);
 
@@ -14,14 +12,14 @@ pub fn run() {
 }
 
 fn generate_players() -> Vec<Player> {
+    // we define players as vector to be able to vary the number of players at runtime
+    // TODO expose number of players as input parameter
     let names = ["A", "B", "C", "D"];
-
     let mut players: Vec<Player> = vec![];
     for name in names.iter() {
         let player = Player::build(name);
         players.push(player);
     }
-
     players
 }
 
@@ -73,6 +71,8 @@ fn generate_deck() -> Vec<Card> {
     cards
 }
 
+// define card object, with optional color field to handle wild cards where
+// color is chosen by player when the card is played
 #[derive(Debug)]
 struct Card {
     symbol: &'static str,
@@ -85,6 +85,7 @@ impl Card {
     }
 }
 
+// define player object
 #[derive(Debug)]
 struct Player {
     name: &'static str,
