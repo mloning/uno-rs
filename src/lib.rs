@@ -1,5 +1,7 @@
 use std::str;
 use std::vec::Vec;
+use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
+use strum_macros::EnumIter;
 
 pub fn run() {
     println!("Hello, world!");
@@ -23,10 +25,19 @@ fn generate_players() -> Vec<Player> {
     players
 }
 
+// EnumIter creates new type with implementation of iter method
+#[derive(Debug, Clone, Copy, EnumIter)]
+enum Color {
+    Red,
+    Blue,
+    Green,
+    Yellow,
+}
+
 fn generate_deck() -> Vec<Card> {
     println!("Generating deck ...");
-    let colors: Vec<&'static str> = vec!["red", "blue", "green", "yellow"];
     // TODO use generator to generate numbers
+    // TODO use enums for symbols?
     let numbers = [
         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "1", "2", "3", "4", "5", "6", "7", "8",
         "9",
@@ -44,21 +55,20 @@ fn generate_deck() -> Vec<Card> {
     ];
 
     let mut cards: Vec<Card> = vec![];
-    for color in colors.iter() {
+    for color in Color::iter() {
         for number in numbers.iter() {
-            let card = Card::build(number, color);
+            let card = Card::build(number, Some(color));
             cards.push(card);
         }
         for symbol in symbols.iter() {
-            let card = Card::build(symbol, color);
+            let card = Card::build(symbol, Some(color));
             cards.push(card);
         }
     }
-    // TODO handle optional color argument
-    // for wild_symbol in wild_symbols.iter() {
-    //     let card = Card::build(symbol);
-    //     cards.push(card);
-    // }
+    for wild_symbol in wild_symbols.iter() {
+        let card = Card::build(wild_symbol, Option::None);
+        cards.push(card);
+    }
 
     cards
 }
@@ -66,15 +76,12 @@ fn generate_deck() -> Vec<Card> {
 #[derive(Debug)]
 struct Card {
     symbol: &'static str,
-    color: &'static str,
+    color: Option<Color>,
 }
 
 impl Card {
-    fn build(symbol: &'static str, color: &'static str) -> Card {
-        Card {
-            symbol: symbol,
-            color: color,
-        }
+    fn build(symbol: &'static str, color: Option<Color>) -> Card {
+        Card { symbol, color }
     }
 }
 
