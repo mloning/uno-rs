@@ -8,8 +8,22 @@ pub fn run() {
     let players = generate_players();
     println!("{:?}", players);
 
-    let dealer = Dealer::build();
+    let mut dealer = Dealer::new();
     println!("{:?}", dealer.stack);
+
+    // TODO draw initial hands
+    dealer.flip_first_card();
+
+    // TODO remaining game logic
+    // get top card
+    // if wild card, let first player set color
+    // game while loop ---
+    // if action card, execute card action
+    // next player
+    // get top card
+    // play
+    // if card, discard, check game over
+    // otherwise, draw 1, play again with that card
 }
 
 fn generate_players() -> Vec<Player> {
@@ -18,7 +32,7 @@ fn generate_players() -> Vec<Player> {
     let names = ["A", "B", "C", "D"];
     let mut players: Vec<Player> = vec![];
     for name in names.iter() {
-        let player = Player::build(name);
+        let player = Player::new(name);
         players.push(player);
     }
     players
@@ -56,16 +70,16 @@ fn generate_deck() -> Vec<Card> {
     let mut cards: Vec<Card> = vec![];
     for color in Color::iter() {
         for number in numbers.iter() {
-            let card = Card::build(number, Some(color));
+            let card = Card::new(number, Some(color));
             cards.push(card);
         }
         for symbol in symbols.iter() {
-            let card = Card::build(symbol, Some(color));
+            let card = Card::new(symbol, Some(color));
             cards.push(card);
         }
     }
     for wild_symbol in wild_symbols.iter() {
-        let card = Card::build(wild_symbol, Option::None);
+        let card = Card::new(wild_symbol, None);
         cards.push(card);
     }
 
@@ -77,6 +91,8 @@ fn generate_deck() -> Vec<Card> {
 
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
+// TODO perhaps distinguish between Card with symbol and color and WildCard
+// with optional color and a common trait
 #[derive(Debug)]
 struct Card {
     symbol: &'static str,
@@ -84,7 +100,7 @@ struct Card {
 }
 
 impl Card {
-    fn build(symbol: &'static str, color: Option<Color>) -> Card {
+    fn new(symbol: &'static str, color: Option<Color>) -> Card {
         Card { symbol, color }
     }
 }
@@ -97,7 +113,7 @@ struct Player {
 }
 
 impl Player {
-    fn build(name: &'static str) -> Player {
+    fn new(name: &'static str) -> Player {
         let mut hand: Vec<Card> = vec![];
         Player {
             name: name,
@@ -106,7 +122,7 @@ impl Player {
     }
 }
 
-// define dealer object, to handle interactions between
+// define dealer object to handle interactions between stack and pile
 #[derive(Debug)]
 struct Dealer {
     stack: Vec<Card>,
@@ -114,19 +130,29 @@ struct Dealer {
 }
 
 impl Dealer {
-    fn build() -> Dealer {
-        // TODO flip first card from deck to initialize pile
+    fn new() -> Dealer {
         let stack = generate_deck();
         let pile: Vec<Card> = vec![];
         Dealer { stack, pile }
     }
 
-    /// Draw `n` cards from stack
+    /// Draw `n` cards from stack.
     fn draw(&mut self, n: usize) -> Vec<Card> {
         let m = self.stack.len() - n;
         let range = m..;
         let cards = self.stack.drain(range).collect();
         cards
+    }
+
+    /// Discard `cards` onto discard pile.
+    fn discard(&mut self, cards: Vec<Card>) {
+        self.pile.extend(cards);
+    }
+
+    /// Flip first card of stack onto pile to start the game.
+    fn flip_first_card(&mut self) {
+        let card = self.draw(1);
+        self.discard(card);
     }
 }
 
@@ -151,7 +177,7 @@ mod tests {
     #[case(7)]
     #[case(13)]
     fn test_dealer_draw_number_of_cards(#[case] n: usize) {
-        let mut dealer = Dealer::build();
+        let mut dealer = Dealer::new();
         let cards = dealer.draw(n);
         assert_eq!(cards.len(), n);
     }
