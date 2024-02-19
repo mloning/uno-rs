@@ -1,3 +1,4 @@
+use rand::seq::SliceRandom;
 use std::str;
 use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
@@ -34,7 +35,6 @@ enum Color {
 
 fn generate_deck() -> Vec<Card> {
     println!("Generating deck ...");
-    // TODO shuffle deck
     // TODO use generator to generate numbers
     // TODO use enums for symbols?
     let numbers = [
@@ -69,6 +69,9 @@ fn generate_deck() -> Vec<Card> {
         cards.push(card);
     }
 
+    // shuffle deck
+    let mut rng = rand::thread_rng();
+    cards.shuffle(&mut rng);
     cards
 }
 

@@ -11,3 +11,4 @@ Run: `cargo run`
 * `cargo run` 
 * `cargo clippy` for linting using [Clippy](https://github.com/rust-lang/rust-clippy)
 * `cargo test --lib` run unit tests in library 
+* `cargo add <dependency>` to add a new dependency
