@@ -4,18 +4,28 @@ use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
 use strum_macros::EnumIter;
 
+const N_INITIAL_CARDS: usize = 7;
+
 pub fn run() {
-    let players = generate_players();
-    println!("{:?}", players);
+    let mut players = generate_players();
+    let n_players = players.len();
+    let names: Vec<&str> = players.iter().map(|x| x.name).collect();
+    println!("Players: {:?}", names);
 
     let mut dealer = Dealer::new();
-    println!("{:?}", dealer.stack);
+    println!("Stack: {:?}", dealer.stack);
 
-    // TODO draw initial hands
-    dealer.flip_first_card();
+    // draw and take initial hands
+    let hands = dealer.draw_initial_hands(n_players, N_INITIAL_CARDS);
+    for (player, hand) in players.iter_mut().zip(hands.iter()) {
+        player.take(hand);
+    }
+
+    dealer.flip_initial_card();
+
+    let top_card = dealer.get_top_card();
 
     // TODO remaining game logic
-    // get top card
     // if wild card, let first player set color
     // game while loop ---
     // if action card, execute card action
@@ -26,11 +36,14 @@ pub fn run() {
     // otherwise, draw 1, play again with that card
 }
 
-fn generate_players() -> Vec<Player> {
+type Players = Vec<Player>;
+type Cards = Vec<Card>;
+
+fn generate_players() -> Players {
     // we define players as vector to be able to vary the number of players at runtime
     // TODO expose number of players as input parameter
     let names = ["A", "B", "C", "D"];
-    let mut players: Vec<Player> = vec![];
+    let mut players: Players = vec![];
     for name in names.iter() {
         let player = Player::new(name);
         players.push(player);
@@ -47,10 +60,10 @@ enum Color {
     Yellow,
 }
 
-fn generate_deck() -> Vec<Card> {
+fn generate_deck() -> Cards {
     println!("Generating deck ...");
     // TODO use generator to generate numbers
-    // TODO use enums for symbols?
+    // TODO use enums for numbers/symbols?
     let numbers = [
         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "1", "2", "3", "4", "5", "6", "7", "8",
         "9",
@@ -67,7 +80,7 @@ fn generate_deck() -> Vec<Card> {
         "wild-draw-4",
     ];
 
-    let mut cards: Vec<Card> = vec![];
+    let mut cards: Cards = vec![];
     for color in Color::iter() {
         for number in numbers.iter() {
             let card = Card::new(number, Some(color));
@@ -93,7 +106,7 @@ fn generate_deck() -> Vec<Card> {
 // color is chosen by player when the card is played
 // TODO perhaps distinguish between Card with symbol and color and WildCard
 // with optional color and a common trait
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Card {
     symbol: &'static str,
     color: Option<Color>,
@@ -106,38 +119,47 @@ impl Card {
 }
 
 // define player object
+// TODO define composite players object
 #[derive(Debug)]
 struct Player {
     name: &'static str,
-    hand: Vec<Card>,
+    hand: Cards,
 }
 
 impl Player {
     fn new(name: &'static str) -> Player {
-        let mut hand: Vec<Card> = vec![];
+        let mut hand: Cards = vec![];
         Player {
             name: name,
             hand: hand,
         }
     }
+
+    /// Take `cards` into hand.
+    fn take(&mut self, cards: &Cards) {
+        self.hand.extend(cards);
+    }
+
+    // TODO
+    // fn play(&mut self, top_card: Card, playable_cards: Option<Cards>) {}
 }
 
 // define dealer object to handle interactions between stack and pile
 #[derive(Debug)]
 struct Dealer {
-    stack: Vec<Card>,
-    pile: Vec<Card>,
+    stack: Cards,
+    pile: Cards,
 }
 
 impl Dealer {
     fn new() -> Dealer {
         let stack = generate_deck();
-        let pile: Vec<Card> = vec![];
+        let pile: Cards = vec![];
         Dealer { stack, pile }
     }
 
     /// Draw `n` cards from stack.
-    fn draw(&mut self, n: usize) -> Vec<Card> {
+    fn draw(&mut self, n: usize) -> Cards {
         let m = self.stack.len() - n;
         let range = m..;
         let cards = self.stack.drain(range).collect();
@@ -145,14 +167,30 @@ impl Dealer {
     }
 
     /// Discard `cards` onto discard pile.
-    fn discard(&mut self, cards: Vec<Card>) {
+    fn discard(&mut self, cards: Cards) {
         self.pile.extend(cards);
     }
 
     /// Flip first card of stack onto pile to start the game.
-    fn flip_first_card(&mut self) {
+    fn flip_initial_card(&mut self) {
         let card = self.draw(1);
         self.discard(card);
+    }
+
+    /// Draw initial hands for players.
+    fn draw_initial_hands(&mut self, n_players: usize, n_cards: usize) -> Vec<Cards> {
+        let mut hands: Vec<Cards> = vec![];
+        for _ in 0..n_players {
+            let hand = self.draw(n_cards);
+            hands.push(hand);
+        }
+        hands
+    }
+
+    /// Get top card from pile.
+    fn get_top_card(&mut self) -> &Card {
+        // TODO how to avoid panic, always initialize object with non-empty pile?
+        self.pile.last().unwrap_or_else(|| panic!("Empty pile!"))
     }
 }
 
@@ -166,8 +204,7 @@ mod tests {
     #[test]
     fn test_generate_deck_number_of_cards() {
         let deck = generate_deck();
-        let n_cards = deck.len();
-        assert_eq!(n_cards, 108);
+        assert_eq!(deck.len(), 108);
     }
 
     #[rstest]
@@ -178,7 +215,11 @@ mod tests {
     #[case(13)]
     fn test_dealer_draw_number_of_cards(#[case] n: usize) {
         let mut dealer = Dealer::new();
+        let n_before = dealer.stack.len();
         let cards = dealer.draw(n);
+        let n_after = dealer.stack.len();
+
         assert_eq!(cards.len(), n);
+        assert_eq!(n_before - n_after, n);
     }
 }
