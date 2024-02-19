@@ -1,3 +1,4 @@
+use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
 use std::str;
 use std::vec::Vec;
@@ -22,7 +23,6 @@ pub fn run() {
     }
 
     dealer.flip_initial_card();
-
     let top_card = dealer.get_top_card();
 
     // TODO remaining game logic
@@ -124,14 +124,18 @@ impl Card {
 struct Player {
     name: &'static str,
     hand: Cards,
+    // TODO should handle all objects implementing the strategy trait
+    strategy: RandomStrategy,
 }
 
 impl Player {
     fn new(name: &'static str) -> Player {
-        let mut hand: Cards = vec![];
+        let hand: Cards = vec![];
+        let strategy = RandomStrategy {};
         Player {
-            name: name,
-            hand: hand,
+            name,
+            hand,
+            strategy,
         }
     }
 
@@ -140,8 +144,40 @@ impl Player {
         self.hand.extend(cards);
     }
 
+    /// Select color of wild cards.
+    fn select_color(&self) -> Color {
+        self.strategy.select_color()
+    }
+
     // TODO
-    // fn play(&mut self, top_card: Card, playable_cards: Option<Cards>) {}
+    // fn play(&mut self, playable_cards: Option<Cards>, top_card: Card) -> Option<Card> {}
+}
+
+// define strategy trait
+trait Strategy {
+    fn select_color(&self) -> Color;
+    fn select_card<'a>(&self, playable_cards: &'a Cards, top_card: &Card) -> Option<&'a Card>;
+}
+
+#[derive(Debug)]
+struct RandomStrategy {}
+
+impl Strategy for RandomStrategy {
+    /// Randomly select card from `playable_cards`, ignoring `top_card`.
+    fn select_card<'a>(&self, playable_cards: &'a Cards, _top_card: &Card) -> Option<&'a Card> {
+        let mut rng = rand::thread_rng();
+        playable_cards.choose(&mut rng)
+    }
+
+    /// Randomly select color.
+    fn select_color(&self) -> Color {
+        let mut rng = rand::thread_rng();
+        let colors: Vec<Color> = Color::iter().collect();
+        // de-reference data, see e.g. https://micouy.github.io/rust-dereferencing/
+        *colors
+            .choose(&mut rng)
+            .unwrap_or_else(|| panic!("No color selected!"))
+    }
 }
 
 // define dealer object to handle interactions between stack and pile
