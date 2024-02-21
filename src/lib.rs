@@ -8,6 +8,7 @@ use strum_macros::EnumIter;
 const N_INITIAL_CARDS: usize = 7;
 
 pub fn run() {
+    // TODO add logging
     let mut players = generate_players();
     let n_players = players.len();
     let names: Vec<&str> = players.get_names();
@@ -18,27 +19,33 @@ pub fn run() {
 
     // draw and take initial hands
     let hands = dealer.draw_initial_hands(n_players, N_INITIAL_CARDS);
-    for (player, hand) in players.iter_mut().zip(hands.iter()) {
-        player.take(hand);
-    }
+    players.take(hands);
 
     // flip first card
     dealer.flip_initial_card();
-    let first_card = dealer.get_top_card();
-    if is_wild(first_card) {
+    let card = dealer.get_top_card();
+
+    // if first card is wild card, let first player set color
+    if is_wild(card) {
         let player = players.first();
         let color = player.select_color();
-        first_card.color = Some(color);
+        card.color = Some(color);
     }
 
-    // TODO remaining game logic
-    // game while loop ---
-    // if action card, execute card action
-    // next player
+    // loop {
+    // TODO if action card, execute card action
+    // if is_action(card) {}
+
+    // TODO pick next player
+    // let player = players.next();
+
+    // let card = dealer.get_top_card();
+
     // get top card
     // play
-    // if card, discard, check game over
+    // if card, discard, check game over, if game over, break
     // otherwise, draw 1, play again with that card
+    // }
 }
 
 type Cards = Vec<Card>;
@@ -47,10 +54,15 @@ fn is_wild(card: &Card) -> bool {
     card.symbol.contains("wild")
 }
 
+fn is_action(card: &Card) -> bool {
+    let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
+    symbols.contains(&card.symbol)
+}
+
 fn generate_players() -> Players {
     // we define players as vector to be able to vary the number of players at runtime
     // TODO expose number of players as input parameter
-    let names = ["A", "B", "C", "D"];
+    let names = ["Anne", "Ben", "Cam", "Dan"];
     let mut players: Vec<Player> = vec![];
     for name in names.iter() {
         let player = Player::new(name);
@@ -112,8 +124,6 @@ fn generate_deck() -> Cards {
 
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
-// TODO perhaps distinguish between ColorCard (symbol and color) and WildCard
-// (symbol and optional color)
 #[derive(Debug, Copy, Clone)]
 struct Card {
     symbol: &'static str,
@@ -121,10 +131,32 @@ struct Card {
 }
 
 impl Card {
-    fn new(symbol: &'static str, color: Option<Color>) -> Card {
-        Card { symbol, color }
+    fn new(symbol: &'static str, color: Option<Color>) -> Self {
+        Self { symbol, color }
     }
 }
+
+// TODO distinguish between stateless ColorCard (symbol and color) and stateful WildCard,
+// or two structs for wild cards, one without color and one with color (symbol and optional color)
+// struct WildCard {
+//     symbol: &'static str,
+// }
+//
+// impl WildCard {
+//     fn set_color(&'static self, color: Color) -> SetWildCard {
+//         SetWildCard {
+//             card: self,
+//             symbol: self.symbol,
+//             color,
+//         }
+//     }
+// }
+//
+// struct SetWildCard {
+//     card: &'static WildCard,
+//     symbol: &'static str,
+//     color: Color,
+// }
 
 // define object for a single player, encapsulating player state and strategy
 #[derive(Debug)]
@@ -136,10 +168,10 @@ struct Player {
 }
 
 impl Player {
-    fn new(name: &'static str) -> Player {
+    fn new(name: &'static str) -> Self {
         let hand: Cards = vec![];
         let strategy = RandomStrategy {};
-        Player {
+        Self {
             name,
             hand,
             strategy,
@@ -165,6 +197,9 @@ struct Players {
     players: Vec<Player>,
 }
 
+// TODO implement player cycling
+// fn cycle(players: Vec<Player>, current: Player, is_reversed: bool) -> IterMut<'_, Player> {}
+
 impl Players {
     /// Get first player.
     fn first(&self) -> &Player {
@@ -172,6 +207,18 @@ impl Players {
             .first()
             .unwrap_or_else(|| panic!("Empty players."))
     }
+
+    /// Get next player.
+    // TODO
+    // fn next(&mut self) -> &mut Player {}
+
+    /// Reverse player cycle.
+    // TODO
+    // fn reverse(&mut self) -> {}
+
+    /// Skip player.
+    // TODO
+    // fn skip(&mut self) -> {}
 
     /// Get number of players.
     fn len(&self) -> usize {
@@ -186,6 +233,13 @@ impl Players {
     /// Iterate over mutable reference of players.
     fn iter_mut(&mut self) -> IterMut<'_, Player> {
         self.players.iter_mut()
+    }
+
+    /// Take one `hand` for each player.
+    fn take(&mut self, hands: Vec<Cards>) {
+        for (player, hand) in self.players.iter_mut().zip(hands.iter()) {
+            player.take(hand);
+        }
     }
 }
 
@@ -224,14 +278,15 @@ struct Dealer {
 }
 
 impl Dealer {
-    fn new() -> Dealer {
+    fn new() -> Self {
         let stack = generate_deck();
         let pile: Cards = vec![];
-        Dealer { stack, pile }
+        Self { stack, pile }
     }
 
     /// Draw `n` cards from stack.
     fn draw(&mut self, n: usize) -> Cards {
+        // TODO recycle pile if stack is empty
         let m = self.stack.len() - n;
         let range = m..;
         let cards = self.stack.drain(range).collect();
