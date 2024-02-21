@@ -1,5 +1,5 @@
-use rand::rngs::ThreadRng;
 use rand::seq::SliceRandom;
+use std::slice::IterMut;
 use std::str;
 use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
@@ -10,7 +10,7 @@ const N_INITIAL_CARDS: usize = 7;
 pub fn run() {
     let mut players = generate_players();
     let n_players = players.len();
-    let names: Vec<&str> = players.iter().map(|x| x.name).collect();
+    let names: Vec<&str> = players.get_names();
     println!("Players: {:?}", names);
 
     let mut dealer = Dealer::new();
@@ -22,11 +22,16 @@ pub fn run() {
         player.take(hand);
     }
 
+    // flip first card
     dealer.flip_initial_card();
-    let top_card = dealer.get_top_card();
+    let first_card = dealer.get_top_card();
+    if is_wild(first_card) {
+        let player = players.first();
+        let color = player.select_color();
+        first_card.color = Some(color);
+    }
 
     // TODO remaining game logic
-    // if wild card, let first player set color
     // game while loop ---
     // if action card, execute card action
     // next player
@@ -36,19 +41,22 @@ pub fn run() {
     // otherwise, draw 1, play again with that card
 }
 
-type Players = Vec<Player>;
 type Cards = Vec<Card>;
+
+fn is_wild(card: &Card) -> bool {
+    card.symbol.contains("wild")
+}
 
 fn generate_players() -> Players {
     // we define players as vector to be able to vary the number of players at runtime
     // TODO expose number of players as input parameter
     let names = ["A", "B", "C", "D"];
-    let mut players: Players = vec![];
+    let mut players: Vec<Player> = vec![];
     for name in names.iter() {
         let player = Player::new(name);
         players.push(player);
     }
-    players
+    Players { players }
 }
 
 // EnumIter creates new type with implementation of iter method
@@ -104,8 +112,8 @@ fn generate_deck() -> Cards {
 
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
-// TODO perhaps distinguish between Card with symbol and color and WildCard
-// with optional color and a common trait
+// TODO perhaps distinguish between ColorCard (symbol and color) and WildCard
+// (symbol and optional color)
 #[derive(Debug, Copy, Clone)]
 struct Card {
     symbol: &'static str,
@@ -118,8 +126,7 @@ impl Card {
     }
 }
 
-// define player object
-// TODO define composite players object
+// define object for a single player, encapsulating player state and strategy
 #[derive(Debug)]
 struct Player {
     name: &'static str,
@@ -151,6 +158,35 @@ impl Player {
 
     // TODO
     // fn play(&mut self, playable_cards: Option<Cards>, top_card: Card) -> Option<Card> {}
+}
+
+/// define object for multiple players, handling player cycles
+struct Players {
+    players: Vec<Player>,
+}
+
+impl Players {
+    /// Get first player.
+    fn first(&self) -> &Player {
+        self.players
+            .first()
+            .unwrap_or_else(|| panic!("Empty players."))
+    }
+
+    /// Get number of players.
+    fn len(&self) -> usize {
+        self.players.len()
+    }
+
+    /// Get player names.
+    fn get_names(&self) -> Vec<&str> {
+        self.players.iter().map(|x| x.name).collect()
+    }
+
+    /// Iterate over mutable reference of players.
+    fn iter_mut(&mut self) -> IterMut<'_, Player> {
+        self.players.iter_mut()
+    }
 }
 
 // define strategy trait
@@ -224,9 +260,11 @@ impl Dealer {
     }
 
     /// Get top card from pile.
-    fn get_top_card(&mut self) -> &Card {
+    fn get_top_card(&mut self) -> &mut Card {
         // TODO how to avoid panic, always initialize object with non-empty pile?
-        self.pile.last().unwrap_or_else(|| panic!("Empty pile!"))
+        self.pile
+            .last_mut()
+            .unwrap_or_else(|| panic!("Empty pile!"))
     }
 }
 
