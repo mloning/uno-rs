@@ -1,7 +1,9 @@
+#[derive(Debug, Clone)]
 struct Cycle {
     values: Vec<usize>,
     current: usize,
     is_reversed: bool,
+    turn: u32,
 }
 
 impl Iterator for Cycle {
@@ -25,38 +27,43 @@ impl Iterator for Cycle {
         // select item
         let item = self.values[self.current];
         println!("item {:?}", item);
+
+        // update turn
+        self.turn += 1;
+
+        // return item
         Some(item)
     }
 }
 
 impl Cycle {
+    /// Create generator that cycles over values from range 0..`n`.
     fn new(n: usize) -> Self {
         let range = 0..n;
         let values = range.collect();
-        Cycle {
+        Self {
             values,
             current: n - 1,
             is_reversed: false,
+            turn: 0,
         }
     }
 
+    /// Reverse cycle.
     fn reverse(&mut self) {
-        println!("reverse");
+        // if we reverse in the first turn, we need to change the starting position
+        // to the first value, so that the next value will be the last value
+        if self.turn == 0 {
+            assert!(!self.is_reversed);
+            self.current = 0;
+        }
+
         self.is_reversed = match self.is_reversed {
             true => false,
             false => true,
         }
     }
 }
-
-// fn main() {
-//     let mut cycle = cycle();
-//
-//     println!("> {:?}", cycle.next());
-//     println!("> {:?}", cycle.next());
-//     println!("> {:?}", cycle.next());
-//     println!("> {:?}", cycle.next());
-// }
 
 #[cfg(test)]
 mod tests {
@@ -95,12 +102,17 @@ mod tests {
         assert_eq!(cycle.next().unwrap(), 0);
     }
 
-    // TODO
-    // #[test]
-    // fn test_cycle_iter_values_init_reverse() {}
+    #[test]
+    fn test_cycle_iter_values_reverse_next() {
+        let mut cycle = Cycle::new(3);
+        cycle.reverse();
+        assert_eq!(cycle.next().unwrap(), 2);
+        assert_eq!(cycle.next().unwrap(), 1);
+        assert_eq!(cycle.next().unwrap(), 0);
+    }
 
     #[test]
-    fn test_cycle_iter_values_double_reverse() {
+    fn test_cycle_iter_values_next_reverse_reverse_next() {
         let mut cycle = Cycle::new(3);
         assert_eq!(cycle.next().unwrap(), 0);
         assert_eq!(cycle.next().unwrap(), 1);
