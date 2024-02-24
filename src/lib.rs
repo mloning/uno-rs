@@ -1,7 +1,8 @@
 mod cycle;
+use cycle::Cycle;
+use cycle::Turn;
 use rand::seq::SliceRandom;
 use std::collections::VecDeque;
-use std::slice::IterMut;
 use std::str;
 use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
@@ -9,54 +10,61 @@ use strum_macros::EnumIter;
 
 const N_CARDS: usize = 108;
 const N_INITIAL_CARDS: usize = 7;
+const N_PLAYERS: usize = 4;
 
+// TODO add logging
 pub fn run() {
-    // TODO add logging
-    let mut players = generate_players();
-    let n_players = players.len();
+    let n_players = 4;
+    let mut players = PlayerCycle::new(n_players);
+
     let names: Vec<&str> = players.get_names();
     println!("Players: {:?}", names);
 
     let mut dealer = Dealer::new();
-    println!("Deck: {:?}", dealer.deck);
+    // println!("Deck: {:?}", dealer.deck);
 
     // draw and take initial hands
-    let hands = dealer.draw_initial_hands(n_players, N_INITIAL_CARDS);
-    players.take(hands);
+    let hands = dealer.draw_hands(n_players, N_INITIAL_CARDS);
+    players.take_hands(hands);
 
     // flip first card
-    dealer.flip_initial_card();
-    let card = dealer.get_top_card();
+    dealer.flip_first_card();
 
-    // loop {
-    // TODO if action card, execute card action
-    // if is_action(card) {}
+    loop {
+        let mut top_card = dealer.top_card();
 
-    // TODO pick next player
-    // let player = players.next();
+        // TODO if action card, execute card action
+        // if card.is_action() {}
 
-    // let card = dealer.get_top_card();
+        // pick next player
+        let mut player = players.next();
+        println!("Player: {:?}", player.name);
+        // let card = player.play_card(top_card);
 
-    // get top card
-    // play
-    // if card, discard, check game over, if game over, break
-    // otherwise, draw 1, play again with that card
-    // }
+        // play
+        // if card, discard, check game over, if game over, break
+        // otherwise, draw 1, play again with that card
+        if players.get_turn() == 10 {
+            break;
+        }
+    }
 }
 
 type Cards = Vec<Card>;
+type Players = Vec<Player>;
 type Deck = VecDeque<Card>;
 
-fn generate_players() -> Players {
+fn generate_players(n_players: usize) -> Players {
     // we define players as vector to be able to vary the number of players at runtime
     // TODO expose number of players as input parameter
-    let names = ["Anne", "Ben", "Cam", "Dan"];
-    let mut players: Vec<Player> = vec![];
+    assert_eq!(n_players, N_PLAYERS);
+    let names = ["A", "B", "C", "D"];
+    let mut players: Players = Vec::with_capacity(n_players);
     for name in names.iter() {
         let player = Player::new(name);
         players.push(player);
     }
-    Players { players }
+    players
 }
 
 // EnumIter creates new type with implementation of iter method
@@ -184,46 +192,49 @@ impl Player {
     }
 
     /// Take `cards` into hand.
-    fn take(&mut self, cards: &Cards) {
+    fn take_cards(&mut self, cards: &Cards) {
         self.hand.extend(cards);
     }
 
-    /// Select color of wild cards.
-    fn select_color(&self) -> Color {
-        self.strategy.select_color()
-    }
-
-    // TODO
-    // fn play(&mut self, playable_cards: Option<Cards>, top_card: Card) -> Option<Card> {}
+    // Play card if possible for given `playable_cards` and `top_card`.
+    // fn play_card(&mut self, playable_cards: Option<Cards>, top_card: Card) -> Option<&Card> {
+    //     // if no playable cards are given, all cards from the hand can be played
+    //     let _playable_cards = match playable_cards {
+    //         Some(cards) => cards,
+    //         None => self.hand.clone(),
+    //     };
+    //     self.strategy.select_card(&_playable_cards, &top_card)
+    // }
 }
 
 /// define object for multiple players, handling player cycles
-struct Players {
-    players: Vec<Player>,
+struct PlayerCycle {
+    players: Players,
+    cycle: Cycle,
 }
 
-// TODO implement player cycling
-// fn cycle(players: Vec<Player>, current: Player, is_reversed: bool) -> IterMut<'_, Player> {}
-
-impl Players {
-    /// Get first player.
-    fn first(&self) -> &Player {
-        self.players
-            .first()
-            .unwrap_or_else(|| panic!("Empty players."))
+impl PlayerCycle {
+    fn new(n_players: usize) -> Self {
+        let players = generate_players(n_players);
+        let cycle = Cycle::new(n_players);
+        Self { players, cycle }
     }
 
     /// Get next player.
-    // TODO
-    // fn next(&mut self) -> &mut Player {}
+    fn next(&mut self) -> &mut Player {
+        let index = self.cycle.next().expect("no cycle values");
+        self.players.get_mut(index).expect("no players")
+    }
 
     /// Reverse player cycle.
-    // TODO
-    // fn reverse(&mut self) -> {}
+    fn reverse(&mut self) {
+        self.cycle.reverse();
+    }
 
     /// Skip player.
-    // TODO
-    // fn skip(&mut self) -> {}
+    fn skip(&mut self) {
+        self.cycle.next();
+    }
 
     /// Get number of players.
     fn len(&self) -> usize {
@@ -235,16 +246,16 @@ impl Players {
         self.players.iter().map(|x| x.name).collect()
     }
 
-    /// Iterate over mutable reference of players.
-    fn iter_mut(&mut self) -> IterMut<'_, Player> {
-        self.players.iter_mut()
+    /// Take `hands`, one for each player.
+    fn take_hands(&mut self, hands: Vec<Cards>) {
+        assert_eq!(self.players.len(), hands.len());
+        for (player, hand) in self.players.iter_mut().zip(hands.iter()) {
+            player.take_cards(hand);
+        }
     }
 
-    /// Take one `hand` for each player.
-    fn take(&mut self, hands: Vec<Cards>) {
-        for (player, hand) in self.players.iter_mut().zip(hands.iter()) {
-            player.take(hand);
-        }
+    fn get_turn(&self) -> Turn {
+        self.cycle.get_turn()
     }
 }
 
@@ -304,10 +315,10 @@ impl Dealer {
     }
 
     /// Flip first card of deck onto pile to start the game.
-    fn flip_initial_card(&mut self) {
+    fn flip_first_card(&mut self) {
         let mut cards = self.draw(1);
         // If the card is a wild card, it is returned to the deck and a new card is drawn.
-        while cards.first().expect("No cards drawn from deck!").is_wild() {
+        while cards.first().expect("no cards drawn").is_wild() {
             self.refill(cards);
             cards = self.draw(1);
         }
@@ -322,9 +333,9 @@ impl Dealer {
         }
     }
 
-    /// Draw initial hands for players.
-    fn draw_initial_hands(&mut self, n_players: usize, n_cards: usize) -> Vec<Cards> {
-        let mut hands: Vec<Cards> = vec![];
+    /// Draw `n_cards` initial hands for `n_players`.
+    fn draw_hands(&mut self, n_players: usize, n_cards: usize) -> Vec<Cards> {
+        let mut hands: Vec<Cards> = Vec::with_capacity(n_players);
         for _ in 0..n_players {
             let hand = self.draw(n_cards);
             hands.push(hand);
@@ -333,11 +344,8 @@ impl Dealer {
     }
 
     /// Get top card from pile.
-    fn get_top_card(&mut self) -> &mut Card {
-        // TODO how to avoid panic, always initialize object with non-empty pile?
-        self.pile
-            .last_mut()
-            .unwrap_or_else(|| panic!("Empty pile!"))
+    fn top_card(&mut self) -> &mut Card {
+        self.pile.last_mut().expect("empty pile")
     }
 }
 
@@ -376,7 +384,7 @@ mod tests {
         assert_eq!(dealer.pile.len(), 0);
 
         let n_before = dealer.deck.len();
-        dealer.flip_initial_card();
+        dealer.flip_first_card();
         let n_after = dealer.deck.len();
 
         assert_eq!(dealer.pile.len(), 1);
@@ -388,8 +396,8 @@ mod tests {
         let mut dealer = Dealer::new();
         let wild_card = Card::new("wild-draw-4", None);
         dealer.deck.push_front(wild_card);
-        dealer.flip_initial_card();
-        let card = dealer.get_top_card();
+        dealer.flip_first_card();
+        let card = dealer.top_card();
 
         assert_ne!(card.clone(), wild_card);
         assert_eq!(dealer.deck.pop_front().unwrap(), wild_card);

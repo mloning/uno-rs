@@ -1,9 +1,11 @@
+pub type Turn = u32;
+
 #[derive(Debug, Clone)]
-struct Cycle {
+pub struct Cycle {
     values: Vec<usize>,
     current: usize,
     is_reversed: bool,
-    turn: u32,
+    turn: Turn,
 }
 
 impl Iterator for Cycle {
@@ -12,21 +14,16 @@ impl Iterator for Cycle {
     fn next(&mut self) -> Option<Self::Item> {
         let n = self.values.len() as i8;
 
-        // update current
-        println!("before {:?}", self.current);
+        // update current, depending on direction
         let next = match self.is_reversed {
             true => self.current as i8 - 1,
             false => self.current as i8 + 1,
         };
-        println!("next {:?}", next);
-        // println!("n {:?}", n);
         let current = next.rem_euclid(n);
-        println!("after {:?}", current);
         self.current = current as usize;
 
         // select item
         let item = self.values[self.current];
-        println!("item {:?}", item);
 
         // update turn
         self.turn += 1;
@@ -38,9 +35,8 @@ impl Iterator for Cycle {
 
 impl Cycle {
     /// Create generator that cycles over values from range 0..`n`.
-    fn new(n: usize) -> Self {
-        let range = 0..n;
-        let values = range.collect();
+    pub fn new(n: usize) -> Self {
+        let values = (0..n).collect();
         Self {
             values,
             current: n - 1,
@@ -50,7 +46,7 @@ impl Cycle {
     }
 
     /// Reverse cycle.
-    fn reverse(&mut self) {
+    pub fn reverse(&mut self) {
         // if we reverse in the first turn, we need to change the starting position
         // to the first value, so that the next value will be the last value
         if self.turn == 0 {
@@ -62,6 +58,10 @@ impl Cycle {
             true => false,
             false => true,
         }
+    }
+
+    pub fn get_turn(&self) -> Turn {
+        self.turn
     }
 }
 
