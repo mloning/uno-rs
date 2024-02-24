@@ -31,23 +31,53 @@ pub fn run() {
     dealer.flip_first_card();
 
     loop {
-        let mut top_card = dealer.top_card();
+        // TODO can we avoid the clone here and use a immutable reference instead?
+        // the problem is that we both look at the top card on the pile and change
+        // the pile when we discard a newly played card, but in theory discarding
+        // the card should happen at the end, when we no longer need the top card
+        let top_card = dealer.top_card().clone();
 
         // TODO if action card, execute card action
         // if card.is_action() {}
 
         // pick next player
-        let mut player = players.next();
+        let player = players.next();
         println!("Player: {:?}", player.name);
-        // let card = player.play_card(top_card);
 
-        // play
-        // if card, discard, check game over, if game over, break
-        // otherwise, draw 1, play again with that card
+        // try playing card from hand
+        let mut card = player.play_from_hand(&top_card);
+
+        //if no card is played, draw a new card and try playing it
+        // TODO sort out borrowing
+        // if card.is_none() {
+        //     let new_card = dealer.draw(1);
+        //     card = player.play_from_card(&top_card, &new_card);
+        //     if card.is_none() {
+        //         player.take_cards(&new_card);
+        //     }
+        // }
+
+        // if card, discard and check game over
+        if card.is_some() {
+            // TODO change discard to take single Card instead of Vec<Card>
+            let cards = vec![*card.unwrap()];
+            dealer.discard(cards);
+            // if game over, break
+            if game_over(player) {
+                println!("Player: {:?} won! Game over.", player.name);
+                break;
+            }
+        }
+        // TODO
         if players.get_turn() == 10 {
             break;
         }
     }
+}
+
+/// Check if `player` has empty hand.
+fn game_over(player: &Player) -> bool {
+    player.hand.len() == 0
 }
 
 type Cards = Vec<Card>;
@@ -196,15 +226,32 @@ impl Player {
         self.hand.extend(cards);
     }
 
-    // Play card if possible for given `playable_cards` and `top_card`.
-    // fn play_card(&mut self, playable_cards: Option<Cards>, top_card: Card) -> Option<&Card> {
-    //     // if no playable cards are given, all cards from the hand can be played
-    //     let _playable_cards = match playable_cards {
-    //         Some(cards) => cards,
-    //         None => self.hand.clone(),
-    //     };
-    //     self.strategy.select_card(&_playable_cards, &top_card)
-    // }
+    /// Play card from `playable_cards` if possible for given `top_card`.
+    fn play_from_card<'a>(
+        &'a self,
+        top_card: &'a Card,
+        playable_cards: &'a Cards,
+    ) -> Option<&'a Card> {
+        self.strategy.select_card(playable_cards, top_card)
+    }
+
+    /// Play card from hand if possible for given `top_card`.
+    fn play_from_hand(&mut self, top_card: &Card) -> Option<&Card> {
+        // select card to play
+        // TODO remove duplicates from playable cards
+        let playable_cards = &self.hand;
+        let card = self.strategy.select_card(playable_cards, top_card);
+
+        // remove selected card from hand
+        // TODO sort out borrowing
+        // if card.is_some() {
+        //     let index = self.hand.iter().position(|x| x == card.unwrap()).unwrap();
+        //     self.hand.remove(index);
+        // }
+
+        // return card
+        card
+    }
 }
 
 /// define object for multiple players, handling player cycles
@@ -262,7 +309,7 @@ impl PlayerCycle {
 // define strategy trait
 trait Strategy {
     fn select_color(&self) -> Color;
-    fn select_card<'a>(&self, playable_cards: &'a Cards, top_card: &Card) -> Option<&'a Card>;
+    fn select_card<'a>(&'a self, playable_cards: &'a Cards, _top_card: &Card) -> Option<&'a Card>;
 }
 
 #[derive(Debug)]
@@ -270,7 +317,7 @@ struct RandomStrategy {}
 
 impl Strategy for RandomStrategy {
     /// Randomly select card from `playable_cards`, ignoring `top_card`.
-    fn select_card<'a>(&self, playable_cards: &'a Cards, _top_card: &Card) -> Option<&'a Card> {
+    fn select_card<'a>(&'a self, playable_cards: &'a Cards, _top_card: &Card) -> Option<&'a Card> {
         let mut rng = rand::thread_rng();
         playable_cards.choose(&mut rng)
     }
@@ -280,9 +327,7 @@ impl Strategy for RandomStrategy {
         let mut rng = rand::thread_rng();
         let colors: Vec<Color> = Color::iter().collect();
         // de-reference data, see e.g. https://micouy.github.io/rust-dereferencing/
-        *colors
-            .choose(&mut rng)
-            .unwrap_or_else(|| panic!("No color selected!"))
+        *colors.choose(&mut rng).expect("empty colors")
     }
 }
 
@@ -305,8 +350,7 @@ impl Dealer {
         // TODO recycle pile if deck is empty
         let m = self.deck.len() - n;
         let range = m..;
-        let cards = self.deck.drain(range).collect();
-        cards
+        self.deck.drain(range).collect()
     }
 
     /// Discard `cards` onto discard pile.
@@ -344,8 +388,8 @@ impl Dealer {
     }
 
     /// Get top card from pile.
-    fn top_card(&mut self) -> &mut Card {
-        self.pile.last_mut().expect("empty pile")
+    fn top_card(&self) -> &Card {
+        self.pile.last().expect("empty pile")
     }
 }
 

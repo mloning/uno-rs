@@ -12,13 +12,12 @@ impl Iterator for Cycle {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let n = self.values.len() as i8;
-
         // update current, depending on direction
         let next = match self.is_reversed {
             true => self.current as i8 - 1,
             false => self.current as i8 + 1,
         };
+        let n = self.values.len() as i8;
         let current = next.rem_euclid(n);
         self.current = current as usize;
 
