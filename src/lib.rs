@@ -1,11 +1,13 @@
 mod cycle;
 use rand::seq::SliceRandom;
+use std::collections::VecDeque;
 use std::slice::IterMut;
 use std::str;
 use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
 use strum_macros::EnumIter;
 
+const N_CARDS: usize = 108;
 const N_INITIAL_CARDS: usize = 7;
 
 pub fn run() {
@@ -16,7 +18,7 @@ pub fn run() {
     println!("Players: {:?}", names);
 
     let mut dealer = Dealer::new();
-    println!("Stack: {:?}", dealer.stack);
+    println!("Deck: {:?}", dealer.deck);
 
     // draw and take initial hands
     let hands = dealer.draw_initial_hands(n_players, N_INITIAL_CARDS);
@@ -25,13 +27,6 @@ pub fn run() {
     // flip first card
     dealer.flip_initial_card();
     let card = dealer.get_top_card();
-
-    // if first card is wild card, let first player set color
-    if is_wild(card) {
-        let player = players.first();
-        let color = player.select_color();
-        card.color = Some(color);
-    }
 
     // loop {
     // TODO if action card, execute card action
@@ -50,15 +45,7 @@ pub fn run() {
 }
 
 type Cards = Vec<Card>;
-
-fn is_wild(card: &Card) -> bool {
-    card.symbol.contains("wild")
-}
-
-fn is_action(card: &Card) -> bool {
-    let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
-    symbols.contains(&card.symbol)
-}
+type Deck = VecDeque<Card>;
 
 fn generate_players() -> Players {
     // we define players as vector to be able to vary the number of players at runtime
@@ -73,7 +60,7 @@ fn generate_players() -> Players {
 }
 
 // EnumIter creates new type with implementation of iter method
-#[derive(Debug, Clone, Copy, EnumIter)]
+#[derive(Debug, Clone, Copy, EnumIter, PartialEq)]
 enum Color {
     Red,
     Blue,
@@ -81,7 +68,7 @@ enum Color {
     Yellow,
 }
 
-fn generate_deck() -> Cards {
+fn generate_deck() -> Deck {
     println!("Generating deck ...");
     // TODO use generator to generate numbers
     // TODO use enums for numbers/symbols?
@@ -101,7 +88,7 @@ fn generate_deck() -> Cards {
         "wild-draw-4",
     ];
 
-    let mut cards: Cards = vec![];
+    let mut cards: Cards = Vec::with_capacity(N_CARDS);
     for color in Color::iter() {
         for number in numbers.iter() {
             let card = Card::new(number, Some(color));
@@ -118,6 +105,14 @@ fn generate_deck() -> Cards {
     }
 
     // shuffle deck
+    cards = shuffle(cards);
+
+    // return as deque type
+    VecDeque::from(cards)
+}
+
+/// Randomly shuffle cards.
+fn shuffle(mut cards: Cards) -> Cards {
     let mut rng = rand::thread_rng();
     cards.shuffle(&mut rng);
     cards
@@ -125,7 +120,7 @@ fn generate_deck() -> Cards {
 
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 struct Card {
     symbol: &'static str,
     color: Option<Color>,
@@ -134,6 +129,15 @@ struct Card {
 impl Card {
     fn new(symbol: &'static str, color: Option<Color>) -> Self {
         Self { symbol, color }
+    }
+
+    fn is_wild(&self) -> bool {
+        self.symbol.starts_with("wild")
+    }
+
+    fn is_action(&self) -> bool {
+        let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
+        symbols.contains(&self.symbol)
     }
 }
 
@@ -271,26 +275,26 @@ impl Strategy for RandomStrategy {
     }
 }
 
-// define dealer object to handle interactions between stack and pile
+// define dealer object to handle interactions between deck and pile
 #[derive(Debug)]
 struct Dealer {
-    stack: Cards,
+    deck: Deck,
     pile: Cards,
 }
 
 impl Dealer {
     fn new() -> Self {
-        let stack = generate_deck();
-        let pile: Cards = vec![];
-        Self { stack, pile }
+        let deck = generate_deck();
+        let pile: Cards = Vec::with_capacity(N_CARDS);
+        Self { deck, pile }
     }
 
-    /// Draw `n` cards from stack.
+    /// Draw `n` cards from deck.
     fn draw(&mut self, n: usize) -> Cards {
-        // TODO recycle pile if stack is empty
-        let m = self.stack.len() - n;
+        // TODO recycle pile if deck is empty
+        let m = self.deck.len() - n;
         let range = m..;
-        let cards = self.stack.drain(range).collect();
+        let cards = self.deck.drain(range).collect();
         cards
     }
 
@@ -299,10 +303,23 @@ impl Dealer {
         self.pile.extend(cards);
     }
 
-    /// Flip first card of stack onto pile to start the game.
+    /// Flip first card of deck onto pile to start the game.
     fn flip_initial_card(&mut self) {
-        let card = self.draw(1);
-        self.discard(card);
+        let mut cards = self.draw(1);
+        // If the card is a wild card, it is returned to the deck and a new card is drawn.
+        while cards.first().expect("No cards drawn from deck!").is_wild() {
+            self.refill(cards);
+            cards = self.draw(1);
+        }
+        self.discard(cards);
+    }
+
+    /// Refill deck with `cards`.
+    fn refill(&mut self, mut cards: Cards) {
+        cards = shuffle(cards);
+        for card in cards {
+            self.deck.push_back(card)
+        }
     }
 
     /// Draw initial hands for players.
@@ -334,7 +351,7 @@ mod tests {
     #[test]
     fn test_generate_deck_number_of_cards() {
         let deck = generate_deck();
-        assert_eq!(deck.len(), 108);
+        assert_eq!(deck.len(), N_CARDS);
     }
 
     #[rstest]
@@ -345,11 +362,36 @@ mod tests {
     #[case(13)]
     fn test_dealer_draw_number_of_cards(#[case] n: usize) {
         let mut dealer = Dealer::new();
-        let n_before = dealer.stack.len();
+        let n_before = dealer.deck.len();
         let cards = dealer.draw(n);
-        let n_after = dealer.stack.len();
+        let n_after = dealer.deck.len();
 
         assert_eq!(cards.len(), n);
         assert_eq!(n_before - n_after, n);
+    }
+
+    #[test]
+    fn test_dealer_flip_initial_card() {
+        let mut dealer = Dealer::new();
+        assert_eq!(dealer.pile.len(), 0);
+
+        let n_before = dealer.deck.len();
+        dealer.flip_initial_card();
+        let n_after = dealer.deck.len();
+
+        assert_eq!(dealer.pile.len(), 1);
+        assert_eq!(n_before - n_after, 1);
+    }
+
+    #[test]
+    fn test_dealer_flip_initial_card_wild_card() {
+        let mut dealer = Dealer::new();
+        let wild_card = Card::new("wild-draw-4", None);
+        dealer.deck.push_front(wild_card);
+        dealer.flip_initial_card();
+        let card = dealer.get_top_card();
+
+        assert_ne!(card.clone(), wild_card);
+        assert_eq!(dealer.deck.pop_front().unwrap(), wild_card);
     }
 }
