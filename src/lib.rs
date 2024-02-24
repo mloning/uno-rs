@@ -1,3 +1,4 @@
+mod cycle;
 use rand::seq::SliceRandom;
 use std::slice::IterMut;
 use std::str;
