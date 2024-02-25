@@ -13,16 +13,18 @@ impl Iterator for Cycle {
 
     fn next(&mut self) -> Option<Self::Item> {
         // update current, depending on direction
+        let c = self.current as isize;
         let next = match self.is_reversed {
-            true => self.current as i8 - 1,
-            false => self.current as i8 + 1,
+            true => c - 1,
+            false => c + 1,
         };
-        let n = self.values.len() as i8;
-        let current = next.rem_euclid(n);
+        let n_values = self.values.len() as isize;
+        let current = next.rem_euclid(n_values); // calculate the least non-negative remainder
+        assert!(current >= 0);
         self.current = current as usize;
 
         // select item
-        let item = self.values[self.current];
+        let item = *self.values.get(self.current).expect("out-of-bounds index");
 
         // update turn
         self.turn += 1;
@@ -34,11 +36,13 @@ impl Iterator for Cycle {
 
 impl Cycle {
     /// Create generator that cycles over values from range 0..`n`.
-    pub fn new(n: usize) -> Self {
-        let values = (0..n).collect();
+    pub fn new(n_values: usize) -> Self {
+        let values = (0..n_values).collect();
+        // initialized with forward direction and start position so that next value will
+        // be the first value
         Self {
             values,
-            current: n - 1,
+            current: n_values - 1,
             is_reversed: false,
             turn: 0,
         }
@@ -53,12 +57,14 @@ impl Cycle {
             self.current = 0;
         }
 
+        // reverse direction, if reversed already, reverse back
         self.is_reversed = match self.is_reversed {
             true => false,
             false => true,
         }
     }
 
+    /// Get turn number.
     pub fn get_turn(&self) -> Turn {
         self.turn
     }

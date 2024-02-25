@@ -8,8 +8,8 @@ use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
 use strum_macros::EnumIter;
 
-const N_CARDS: usize = 108;
-const N_INITIAL_CARDS: usize = 7;
+const N_CARDS: usize = 108; // number of cards in standard deck
+const N_INITIAL_CARDS: usize = 7; // number of cards in initial player hands
 const N_PLAYERS: usize = 4;
 
 // TODO add logging
@@ -31,11 +31,7 @@ pub fn run() {
     dealer.flip_first_card();
 
     loop {
-        // TODO can we avoid the clone here and use a immutable reference instead?
-        // the problem is that we both look at the top card on the pile and change
-        // the pile when we discard a newly played card, but in theory discarding
-        // the card should happen at the end, when we no longer need the top card
-        let top_card = dealer.top_card().clone();
+        let top_card = dealer.top_card();
 
         // TODO if action card, execute card action
         // if card.is_action() {}
@@ -59,7 +55,6 @@ pub fn run() {
 
         // if card, discard and check game over
         if card.is_some() {
-            // TODO change discard to take single Card instead of Vec<Card>
             let cards = vec![*card.unwrap()];
             dealer.discard(cards);
             // if game over, break
@@ -68,7 +63,7 @@ pub fn run() {
                 break;
             }
         }
-        // TODO
+        // TODO remove
         if players.get_turn() == 10 {
             break;
         }
@@ -107,7 +102,6 @@ enum Color {
 }
 
 fn generate_deck() -> Deck {
-    println!("Generating deck ...");
     // TODO use generator to generate numbers
     // TODO use enums for numbers/symbols?
     let numbers = [
@@ -206,7 +200,8 @@ impl Card {
 struct Player {
     name: &'static str,
     hand: Cards,
-    // TODO should handle all objects implementing the strategy trait
+    // TODO should handle all objects implementing the strategy trait not just the
+    // specific random strategy
     strategy: RandomStrategy,
 }
 
@@ -345,36 +340,78 @@ impl Dealer {
         Self { deck, pile }
     }
 
-    /// Draw `n` cards from deck.
-    fn draw(&mut self, n: usize) -> Cards {
-        // TODO recycle pile if deck is empty
-        let m = self.deck.len() - n;
-        let range = m..;
-        self.deck.drain(range).collect()
+    /// Draw `n_cards` cards from deck.
+    fn draw(&mut self, n_cards: usize) -> Cards {
+        let n_pile = self.pile.len();
+        let n_available = self.deck.len();
+
+        // check there are enough cards in deck and pile
+        assert!(n_cards < (n_pile + n_available - 1));
+
+        if n_cards <= n_available {
+            // if enough cards are in the deck, simply draw cards
+            self.draw_from_deck(n_cards)
+        } else {
+            // otherwise, draw available cards, recycle pile and draw remaining cards
+            let mut cards = Vec::with_capacity(n_cards);
+            cards.extend(self.draw_from_deck(n_available));
+
+            self.recycle_pile();
+
+            let n_remaining = n_cards - n_available;
+            cards.extend(self.draw_from_deck(n_remaining));
+            cards
+        }
+    }
+
+    // Draw `n_cards` from deck, without recycling pile.
+    fn draw_from_deck(&mut self, n_cards: usize) -> Cards {
+        let n_available = self.deck.len();
+        assert!(
+            n_available >= n_cards,
+            "n_available: {}, n_cards: {}",
+            n_available,
+            n_cards
+        );
+        let start = n_available - n_cards;
+        self.deck.drain(start..).collect()
     }
 
     /// Discard `cards` onto discard pile.
     fn discard(&mut self, cards: Cards) {
+        // TODO change discard to take single Card instead of Vec<Card>
         self.pile.extend(cards);
     }
 
     /// Flip first card of deck onto pile to start the game.
     fn flip_first_card(&mut self) {
         let mut cards = self.draw(1);
-        // If the card is a wild card, it is returned to the deck and a new card is drawn.
+
+        // if the card is a wild card, it is returned to the deck and a new card is drawn.
         while cards.first().expect("no cards drawn").is_wild() {
-            self.refill(cards);
+            self.refill_deck(cards);
             cards = self.draw(1);
         }
+
         self.discard(cards);
     }
 
     /// Refill deck with `cards`.
-    fn refill(&mut self, mut cards: Cards) {
+    fn refill_deck(&mut self, mut cards: Cards) {
         cards = shuffle(cards);
         for card in cards {
             self.deck.push_back(card)
         }
+    }
+
+    /// Recyle all cards except top card from discard pile into deck.
+    fn recycle_pile(&mut self) {
+        let n = self.pile.len();
+        assert!(n > 0); // pile must have at least one card
+        let end = self.pile.len() - 1; // keep top card
+        let cards = self.pile.drain(0..end).collect();
+
+        self.refill_deck(cards);
     }
 
     /// Draw `n_cards` initial hands for `n_players`.
@@ -388,8 +425,12 @@ impl Dealer {
     }
 
     /// Get top card from pile.
-    fn top_card(&self) -> &Card {
-        self.pile.last().expect("empty pile")
+    fn top_card(&self) -> Card {
+        // TODO can we avoid the clone here and use a immutable reference instead?
+        // the problem is that we both look at the top card on the pile and change
+        // the pile when we discard a newly played card, but in theory discarding
+        // the card should happen at the end, when we no longer need the top card
+        self.pile.last().expect("empty pile").clone()
     }
 }
 
@@ -401,7 +442,7 @@ mod tests {
     use rstest::rstest;
 
     #[test]
-    fn test_generate_deck_number_of_cards() {
+    fn test_generate_deck_n_cards() {
         let deck = generate_deck();
         assert_eq!(deck.len(), N_CARDS);
     }
@@ -412,7 +453,7 @@ mod tests {
     #[case(3)]
     #[case(7)]
     #[case(13)]
-    fn test_dealer_draw_number_of_cards(#[case] n: usize) {
+    fn test_dealer_draw_n_cards_without_recycling(#[case] n: usize) {
         let mut dealer = Dealer::new();
         let n_before = dealer.deck.len();
         let cards = dealer.draw(n);
@@ -420,6 +461,25 @@ mod tests {
 
         assert_eq!(cards.len(), n);
         assert_eq!(n_before - n_after, n);
+    }
+
+    #[test]
+    fn test_dealer_draw_with_recycle() {
+        let n = 20;
+
+        // empty deck into pile
+        let mut dealer = Dealer::new();
+        let _cards = dealer.draw(100);
+        dealer.discard(_cards);
+        let n_available = dealer.deck.len();
+
+        // draw more cards than in deck
+        let top_card = dealer.top_card();
+        assert!(n > n_available);
+        let cards = dealer.draw(n);
+
+        assert_eq!(cards.len(), n); // check all requested cards were drawn
+        assert_eq!(top_card, dealer.top_card()); // check top card stays the same
     }
 
     #[test]
