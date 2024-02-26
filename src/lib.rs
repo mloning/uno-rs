@@ -16,18 +16,13 @@ const N_PLAYERS: usize = 4;
 pub fn run() {
     let n_players = 4;
     let mut players = PlayerCycle::new(n_players);
-
-    let names: Vec<&str> = players.get_names();
-    println!("Players: {:?}", names);
+    println!("Players: {:?}", players.get_names());
 
     let mut dealer = Dealer::new();
-    // println!("Deck: {:?}", dealer.deck);
 
-    // draw and take initial hands
     let hands = dealer.draw_hands(n_players, N_INITIAL_CARDS);
     players.take_hands(hands);
 
-    // flip first card
     dealer.flip_first_card();
 
     loop {
@@ -38,41 +33,42 @@ pub fn run() {
 
         // pick next player
         let player = players.next();
-        println!("Player: {:?}", player.name);
 
         // try playing card from hand
-        let mut card = player.play_from_hand(&top_card);
+        let card = player.play_from_hand(&top_card);
+        println!("{:?}, {:?}", player.name, player.hand.len());
 
-        //if no card is played, draw a new card and try playing it
-        // TODO sort out borrowing
-        // if card.is_none() {
-        //     let new_card = dealer.draw(1);
-        //     card = player.play_from_card(&top_card, &new_card);
-        //     if card.is_none() {
-        //         player.take_cards(&new_card);
-        //     }
-        // }
+        // if no card is played, draw a new card and try playing it
+        match card {
+            Some(_) => {}
+            None => {
+                let new_card = dealer.draw(1);
+                // TODO
+                // card = player.play_from_card(&top_card, &new_card);
+                match card {
+                    Some(_) => {}
+                    None => player.take_cards(new_card),
+                }
+            }
+        };
 
         // if card, discard and check game over
-        if card.is_some() {
-            let cards = vec![*card.unwrap()];
-            dealer.discard(cards);
-            // if game over, break
-            if game_over(player) {
-                println!("Player: {:?} won! Game over.", player.name);
-                break;
+        match card {
+            None => {}
+            Some(card) => {
+                dealer.discard(vec![card]);
+                if game_over(player) {
+                    println!("Player: {:?} won! Game over.", player.name);
+                    break;
+                }
             }
-        }
-        // TODO remove
-        if players.get_turn() == 10 {
-            break;
         }
     }
 }
 
 /// Check if `player` has empty hand.
 fn game_over(player: &Player) -> bool {
-    player.hand.len() == 0
+    player.hand.is_empty()
 }
 
 type Cards = Vec<Card>;
@@ -167,6 +163,10 @@ impl Card {
         self.symbol.starts_with("wild")
     }
 
+    fn is_wild_draw_4(&self) -> bool {
+        self.symbol == "wild-draw-4s"
+    }
+
     fn is_action(&self) -> bool {
         let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
         symbols.contains(&self.symbol)
@@ -195,6 +195,35 @@ impl Card {
 //     color: Color,
 // }
 
+fn filter_legal_cards(cards: Cards, top_card: Card) -> Cards {
+    assert!(!cards.is_empty());
+    assert!(top_card.color.is_some());
+
+    let n = cards.len();
+    let mut legal_cards = Vec::with_capacity(n);
+    let mut wild_draw_4s = Vec::with_capacity(n);
+    let mut has_color_match = false;
+
+    for card in cards {
+        if card.is_wild_draw_4() {
+            wild_draw_4s.push(card);
+            continue;
+        }
+        let color_match = card.color == top_card.color;
+        let symbol_match = card.symbol == top_card.symbol;
+        if card.is_wild() || color_match || symbol_match {
+            legal_cards.push(card);
+        }
+        if color_match {
+            has_color_match = true;
+        }
+    }
+    if !has_color_match {
+        legal_cards.extend(wild_draw_4s);
+    }
+    legal_cards
+}
+
 // define object for a single player, encapsulating player state and strategy
 #[derive(Debug)]
 struct Player {
@@ -217,39 +246,45 @@ impl Player {
     }
 
     /// Take `cards` into hand.
-    fn take_cards(&mut self, cards: &Cards) {
+    fn take_cards(&mut self, cards: Cards) {
+        assert!(!cards.is_empty());
         self.hand.extend(cards);
     }
 
     /// Play card from `playable_cards` if possible for given `top_card`.
-    fn play_from_card<'a>(
-        &'a self,
-        top_card: &'a Card,
-        playable_cards: &'a Cards,
-    ) -> Option<&'a Card> {
-        self.strategy.select_card(playable_cards, top_card)
+    fn play_from_cards(&self, top_card: &Card, cards: Cards) -> Option<Card> {
+        assert!(!cards.is_empty());
+        let legal_cards = filter_legal_cards(cards, *top_card);
+        match legal_cards.is_empty() {
+            true => None,
+            false => self.strategy.select_card(legal_cards),
+        }
     }
 
     /// Play card from hand if possible for given `top_card`.
-    fn play_from_hand(&mut self, top_card: &Card) -> Option<&Card> {
-        // select card to play
-        // TODO remove duplicates from playable cards
-        let playable_cards = &self.hand;
-        let card = self.strategy.select_card(playable_cards, top_card);
-
-        // remove selected card from hand
-        // TODO sort out borrowing
-        // if card.is_some() {
-        //     let index = self.hand.iter().position(|x| x == card.unwrap()).unwrap();
-        //     self.hand.remove(index);
-        // }
-
-        // return card
+    fn play_from_hand(&mut self, top_card: &Card) -> Option<Card> {
+        let cards = self.hand.clone();
+        let card = self.play_from_cards(top_card, cards);
+        match card {
+            None => {}
+            Some(card) => {
+                println!("hand={:?} \n card={:?}", self.hand, card);
+                // remove card from hand
+                // TODO card played has color set, but card on hand doesn't; maybe
+                // add some unique ID to cards?
+                let index = self
+                    .hand
+                    .iter()
+                    .position(|x| *x == card)
+                    .expect("selected card not in hand");
+                self.hand.remove(index);
+            }
+        }
         card
     }
 }
 
-/// define object for multiple players, handling player cycles
+// define object for multiple players, handling player cycles
 struct PlayerCycle {
     players: Players,
     cycle: Cycle,
@@ -278,11 +313,6 @@ impl PlayerCycle {
         self.cycle.next();
     }
 
-    /// Get number of players.
-    fn len(&self) -> usize {
-        self.players.len()
-    }
-
     /// Get player names.
     fn get_names(&self) -> Vec<&str> {
         self.players.iter().map(|x| x.name).collect()
@@ -291,38 +321,47 @@ impl PlayerCycle {
     /// Take `hands`, one for each player.
     fn take_hands(&mut self, hands: Vec<Cards>) {
         assert_eq!(self.players.len(), hands.len());
-        for (player, hand) in self.players.iter_mut().zip(hands.iter()) {
+        for (player, hand) in self.players.iter_mut().zip(hands.into_iter()) {
             player.take_cards(hand);
         }
     }
 
-    fn get_turn(&self) -> Turn {
-        self.cycle.get_turn()
+    /// Get turn number.
+    fn turn(&self) -> Turn {
+        self.cycle.turn()
     }
 }
 
 // define strategy trait
 trait Strategy {
-    fn select_color(&self) -> Color;
-    fn select_card<'a>(&'a self, playable_cards: &'a Cards, _top_card: &Card) -> Option<&'a Card>;
+    /// Select card from `legal_cards`.
+    // TODO pass on game state for enabling strategies to make smarter decisions
+    fn select_card(&self, legal_cards: Cards) -> Option<Card>;
 }
 
 #[derive(Debug)]
 struct RandomStrategy {}
 
-impl Strategy for RandomStrategy {
-    /// Randomly select card from `playable_cards`, ignoring `top_card`.
-    fn select_card<'a>(&'a self, playable_cards: &'a Cards, _top_card: &Card) -> Option<&'a Card> {
-        let mut rng = rand::thread_rng();
-        playable_cards.choose(&mut rng)
-    }
+/// Randomly select color.
+fn select_random_color() -> Color {
+    let mut rng = rand::thread_rng();
+    let colors: Vec<Color> = Color::iter().collect();
+    // de-reference data, see e.g. https://micouy.github.io/rust-dereferencing/
+    *colors.choose(&mut rng).expect("empty colors")
+}
 
-    /// Randomly select color.
-    fn select_color(&self) -> Color {
+impl Strategy for RandomStrategy {
+    /// Randomly select card from `legal_cards`.
+    fn select_card(&self, legal_cards: Cards) -> Option<Card> {
+        assert!(!legal_cards.is_empty());
         let mut rng = rand::thread_rng();
-        let colors: Vec<Color> = Color::iter().collect();
-        // de-reference data, see e.g. https://micouy.github.io/rust-dereferencing/
-        *colors.choose(&mut rng).expect("empty colors")
+        let mut card = *legal_cards.choose(&mut rng).expect("empty legal cards");
+        if card.is_wild() {
+            // if wild card, select color
+            let color = select_random_color();
+            card.color = Some(color);
+        }
+        Some(card)
     }
 }
 
@@ -426,11 +465,12 @@ impl Dealer {
 
     /// Get top card from pile.
     fn top_card(&self) -> Card {
-        // TODO can we avoid the clone here and use a immutable reference instead?
+        // TODO can we avoid the de-referencing (copy using the copy trait) here
+        // and use an immutable reference instead?
         // the problem is that we both look at the top card on the pile and change
         // the pile when we discard a newly played card, but in theory discarding
         // the card should happen at the end, when we no longer need the top card
-        self.pile.last().expect("empty pile").clone()
+        *self.pile.last().expect("empty pile")
     }
 }
 
@@ -505,5 +545,14 @@ mod tests {
 
         assert_ne!(card.clone(), wild_card);
         assert_eq!(dealer.deck.pop_front().unwrap(), wild_card);
+    }
+
+    // TODO add more tests
+    #[test]
+    fn test_filter_legal_cards() {
+        let cards = vec![Card::new("0", Some(Color::Red))];
+        let top_card = Card::new("1", Some(Color::Red));
+        let legal_cards = filter_legal_cards(cards.clone(), top_card);
+        assert_eq!(legal_cards, cards);
     }
 }

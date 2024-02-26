@@ -65,7 +65,7 @@ impl Cycle {
     }
 
     /// Get turn number.
-    pub fn get_turn(&self) -> Turn {
+    pub fn turn(&self) -> Turn {
         self.turn
     }
 }
