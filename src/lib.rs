@@ -24,17 +24,23 @@ pub fn run() {
     players.take_hands(hands);
 
     dealer.flip_first_card();
+    let card = Some(dealer.top_card());
 
     loop {
-        let top_card = dealer.top_card();
-
-        // TODO if action card, execute card action
-        // if card.is_action() {}
+        // if action card, execute card action
+        match card {
+            None => {}
+            Some(card) => {
+                // TODO
+                if card.is_action() {}
+            }
+        }
 
         // pick next player
         let player = players.next();
 
         // try playing card from hand
+        let top_card = dealer.top_card();
         let card = player.play_from_hand(&top_card);
         println!("{:?}, {:?}", player.name, player.hand.len());
 
