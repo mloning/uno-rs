@@ -31,8 +31,23 @@ pub fn run() {
         match card {
             None => {}
             Some(card) => {
-                // TODO
-                if card.is_action() {}
+                if card.is_action() {
+                    match card.symbol {
+                        "skip" => players.skip(),
+                        "reverse" => players.reverse(),
+                        "draw-2" => {
+                            let player = players.next();
+                            let cards = dealer.draw(2);
+                            player.take_cards(cards);
+                        }
+                        "wild-draw-4" => {
+                            let player = players.next();
+                            let cards = dealer.draw(4);
+                            player.take_cards(cards);
+                        }
+                        _ => panic!("invalid action card symbol"),
+                    }
+                }
             }
         }
 
@@ -41,21 +56,20 @@ pub fn run() {
 
         // try playing card from hand
         let top_card = dealer.top_card();
-        let card = player.play_from_hand(&top_card);
+        let mut card = player.play_from_hand(&top_card);
         println!("{:?}, {:?}", player.name, player.hand.len());
 
         // if no card is played, draw a new card and try playing it
         match card {
-            Some(_) => {}
             None => {
                 let new_card = dealer.draw(1);
-                // TODO
-                // card = player.play_from_card(&top_card, &new_card);
+                card = player.play_from_cards(&top_card, new_card.clone());
                 match card {
                     Some(_) => {}
                     None => player.take_cards(new_card),
                 }
             }
+            Some(_) => {}
         };
 
         // if card, discard and check game over
