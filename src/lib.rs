@@ -153,14 +153,14 @@ fn generate_deck() -> Deck {
     }
 
     // shuffle deck
-    cards = shuffle(cards);
+    cards = randomly_shuffle_cards(cards);
 
     // return as deque type
     VecDeque::from(cards)
 }
 
 /// Randomly shuffle cards.
-fn shuffle(mut cards: Cards) -> Cards {
+fn randomly_shuffle_cards(mut cards: Cards) -> Cards {
     let mut rng = rand::thread_rng();
     cards.shuffle(&mut rng);
     cards
@@ -456,28 +456,27 @@ impl Dealer {
         self.pile.extend(cards);
     }
 
-    /// Flip first card of deck onto pile to start the game.
+    /// Flip first card of deck onto pile to start the game, discarding wild cards.
     fn flip_first_card(&mut self) {
-        let mut cards = self.draw(1);
-
         // if the card is a wild card, it is returned to the deck and a new card is drawn.
-        while cards.first().expect("no cards drawn").is_wild() {
-            self.refill_deck(cards);
-            cards = self.draw(1);
-        }
-
+        let cards = loop {
+            let cards = self.draw(1);
+            match cards.first().expect("no cards drawn").is_wild() {
+                true => self.refill_deck(cards),
+                false => break cards,
+            }
+        };
         self.discard(cards);
     }
 
     /// Refill deck with `cards`.
-    fn refill_deck(&mut self, mut cards: Cards) {
-        cards = shuffle(cards);
+    fn refill_deck(&mut self, cards: Cards) {
         for mut card in cards {
             // reset color of wild cards
             if card.is_wild() {
                 card.color = None;
             }
-            self.deck.push_back(card)
+            self.deck.push_front(card)
         }
     }
 
@@ -486,8 +485,8 @@ impl Dealer {
         let n = self.pile.len();
         assert!(n > 0); // pile must have at least one card
         let end = self.pile.len() - 1; // keep top card
-        let cards = self.pile.drain(0..end).collect();
-
+        let mut cards = self.pile.drain(0..end).collect();
+        cards = randomly_shuffle_cards(cards);
         self.refill_deck(cards);
     }
 
@@ -523,6 +522,50 @@ mod tests {
     fn test_generate_deck_n_cards() {
         let deck = generate_deck();
         assert_eq!(deck.len(), N_CARDS);
+    }
+
+    #[test]
+    fn test_dealer_flip_first_card() {
+        let mut dealer = Dealer::new();
+        assert_eq!(dealer.pile.len(), 0);
+
+        let n_before = dealer.deck.len();
+        dealer.flip_first_card();
+        let n_after = dealer.deck.len();
+
+        assert_eq!(dealer.pile.len(), 1);
+        assert_eq!(n_before - n_after, 1);
+    }
+
+    #[test]
+    fn test_dealer_flip_first_card_wild_cards() {
+        let mut dealer = Dealer::new();
+
+        // add wild cards to back of deck
+        let first_cards = vec![
+            Card::new("0", Some(Color::Red)),
+            Card::new("wild", None),
+            Card::new("wild-draw-4", None),
+        ];
+        for card in first_cards.clone() {
+            dealer.deck.push_back(card)
+        }
+        println!("bdeck {:?}", dealer.deck);
+        println!("bpile {:?}", dealer.pile);
+
+        assert!(dealer.pile.is_empty());
+        dealer.flip_first_card();
+
+        println!("deck {:?}", dealer.deck);
+        println!("pile {:?}", dealer.pile);
+
+        // check top card
+        assert!(!dealer.top_card().is_wild());
+        assert_eq!(dealer.top_card(), first_cards[0]);
+
+        // check discarded wild cards
+        assert_eq!(dealer.deck[0], first_cards[1]);
+        assert_eq!(dealer.deck[1], first_cards[2]);
     }
 
     #[rstest]
@@ -563,31 +606,6 @@ mod tests {
 
         assert_eq!(cards.len(), n); // check all requested cards were drawn
         assert_eq!(top_card, dealer.top_card()); // check top card stays the same
-    }
-
-    #[test]
-    fn test_dealer_flip_initial_card() {
-        let mut dealer = Dealer::new();
-        assert_eq!(dealer.pile.len(), 0);
-
-        let n_before = dealer.deck.len();
-        dealer.flip_first_card();
-        let n_after = dealer.deck.len();
-
-        assert_eq!(dealer.pile.len(), 1);
-        assert_eq!(n_before - n_after, 1);
-    }
-
-    #[test]
-    fn test_dealer_flip_initial_card_wild_card() {
-        let mut dealer = Dealer::new();
-        let wild_card = Card::new("wild-draw-4", None);
-        dealer.deck.push_front(wild_card);
-        dealer.flip_first_card();
-        let card = dealer.top_card();
-
-        assert_ne!(card.clone(), wild_card);
-        assert_eq!(dealer.deck.pop_front().unwrap(), wild_card);
     }
 
     #[test]
