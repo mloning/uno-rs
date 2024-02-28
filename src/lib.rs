@@ -177,6 +177,13 @@ impl Card {
         let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
         symbols.contains(&self.symbol)
     }
+
+    fn is_equal_ignore_wild_color(&self, other: &Card) -> bool {
+        match self.is_wild() {
+            true => self.symbol == other.symbol,
+            false => self.symbol == other.symbol && self.color == other.color,
+        }
+    }
 }
 
 // TODO distinguish between stateless ColorCard (symbol and color) and stateful WildCard,
@@ -261,6 +268,7 @@ impl Player {
     fn play_from_cards(&self, top_card: &Card, cards: Cards) -> Option<Card> {
         assert!(!cards.is_empty());
         let legal_cards = filter_legal_cards(cards, *top_card);
+        let legal_cards = remove_duplicates(legal_cards);
         match legal_cards.is_empty() {
             true => None,
             false => self.strategy.select_card(legal_cards),
@@ -271,23 +279,25 @@ impl Player {
     fn play_from_hand(&mut self, top_card: &Card) -> Option<Card> {
         let cards = self.hand.clone();
         let card = self.play_from_cards(top_card, cards);
+
+        // remove card from hand
         match card {
             None => {}
             Some(card) => {
-                println!("hand={:?} \n card={:?}", self.hand, card);
-                // remove card from hand
-                // TODO card played has color set, but card on hand doesn't; maybe
-                // add some unique ID to cards?
                 let index = self
                     .hand
                     .iter()
-                    .position(|x| *x == card)
+                    .position(|x| x.is_equal_ignore_wild_color(&card))
                     .expect("selected card not in hand");
                 self.hand.remove(index);
             }
         }
         card
     }
+}
+
+fn remove_duplicates(cards: Cards) -> Cards {
+    cards
 }
 
 // define object for multiple players, handling player cycles
@@ -364,6 +374,7 @@ impl Strategy for RandomStrategy {
         let mut card = *legal_cards.choose(&mut rng).expect("empty legal cards");
         if card.is_wild() {
             // if wild card, select color
+            assert!(card.color.is_none());
             let color = select_random_color();
             card.color = Some(color);
         }
@@ -425,6 +436,9 @@ impl Dealer {
     /// Discard `cards` onto discard pile.
     fn discard(&mut self, cards: Cards) {
         // TODO change discard to take single Card instead of Vec<Card>
+        for card in cards.iter().filter(|x| x.is_wild()) {
+            assert!(card.color.is_some());
+        }
         self.pile.extend(cards);
     }
 
@@ -444,7 +458,11 @@ impl Dealer {
     /// Refill deck with `cards`.
     fn refill_deck(&mut self, mut cards: Cards) {
         cards = shuffle(cards);
-        for card in cards {
+        for mut card in cards {
+            // reset color of wild cards
+            if card.is_wild() {
+                card.color = None;
+            }
             self.deck.push_back(card)
         }
     }
@@ -513,13 +531,18 @@ mod tests {
     fn test_dealer_draw_with_recycle() {
         let n = 20;
 
-        // empty deck into pile
+        // draw most cards from deck
         let mut dealer = Dealer::new();
-        let _cards = dealer.draw(100);
+        let mut _cards = dealer.draw(100);
+
+        // set color for discard to work
+        for _card in _cards.iter_mut().filter(|x| x.is_wild()) {
+            _card.color = Some(select_random_color());
+        }
         dealer.discard(_cards);
         let n_available = dealer.deck.len();
 
-        // draw more cards than in deck
+        // draw more cards than remaining in deck
         let top_card = dealer.top_card();
         assert!(n > n_available);
         let cards = dealer.draw(n);
