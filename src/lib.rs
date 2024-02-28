@@ -1,6 +1,5 @@
 mod cycle;
 use cycle::Cycle;
-use cycle::Turn;
 use rand::seq::SliceRandom;
 use std::collections::VecDeque;
 use std::str;
@@ -12,41 +11,44 @@ const N_CARDS: usize = 108; // number of cards in standard deck
 const N_INITIAL_CARDS: usize = 7; // number of cards in initial player hands
 const N_PLAYERS: usize = 4;
 
+// TODO split code into smaller files/modules
 // TODO add logging
 pub fn run() {
+    // initialize player cycle
     let n_players = 4;
     let mut players = PlayerCycle::new(n_players);
     println!("Players: {:?}", players.get_names());
 
+    // initialize dealer and player hands
     let mut dealer = Dealer::new();
-
     let hands = dealer.draw_hands(n_players, N_INITIAL_CARDS);
     players.take_hands(hands);
 
+    // initialize pile
     dealer.flip_first_card();
+
+    // set first card so that actions will be executed at the start of the game
     let card = Some(dealer.top_card());
 
+    // cycle through players until game over
     loop {
         // if action card, execute card action
-        match card {
-            None => {}
-            Some(card) => {
-                if card.is_action() {
-                    match card.symbol {
-                        "skip" => players.skip(),
-                        "reverse" => players.reverse(),
-                        "draw-2" => {
-                            let player = players.next();
-                            let cards = dealer.draw(2);
-                            player.take_cards(cards);
-                        }
-                        "wild-draw-4" => {
-                            let player = players.next();
-                            let cards = dealer.draw(4);
-                            player.take_cards(cards);
-                        }
-                        _ => panic!("invalid action card symbol"),
+        if let Some(card) = card {
+            if card.is_action() {
+                match card.symbol {
+                    "skip" => players.skip(),
+                    "reverse" => players.reverse(),
+                    "draw-2" => {
+                        let player = players.next();
+                        let cards = dealer.draw(2);
+                        player.take_cards(cards);
                     }
+                    "wild-draw-4" => {
+                        let player = players.next();
+                        let cards = dealer.draw(4);
+                        player.take_cards(cards);
+                    }
+                    _ => panic!("invalid action card symbol"),
                 }
             }
         }
@@ -57,30 +59,22 @@ pub fn run() {
         // try playing card from hand
         let top_card = dealer.top_card();
         let mut card = player.play_from_hand(&top_card);
-        println!("{:?}, {:?}", player.name, player.hand.len());
 
         // if no card is played, draw a new card and try playing it
-        match card {
-            None => {
-                let new_card = dealer.draw(1);
-                card = player.play_from_cards(&top_card, new_card.clone());
-                match card {
-                    Some(_) => {}
-                    None => player.take_cards(new_card),
-                }
+        if card.is_none() {
+            let new_card = dealer.draw(1);
+            card = player.play_from_cards(&top_card, new_card.clone());
+            if card.is_none() {
+                player.take_cards(new_card)
             }
-            Some(_) => {}
-        };
+        }
 
         // if card, discard and check game over
-        match card {
-            None => {}
-            Some(card) => {
-                dealer.discard(vec![card]);
-                if game_over(player) {
-                    println!("Player: {:?} won! Game over.", player.name);
-                    break;
-                }
+        if card.is_some() {
+            dealer.discard(vec![card.expect("no card")]);
+            if game_over(player) {
+                println!("Player: {:?} won! Game over.", player.name);
+                break;
             }
         }
     }
@@ -96,7 +90,6 @@ type Players = Vec<Player>;
 type Deck = VecDeque<Card>;
 
 fn generate_players(n_players: usize) -> Players {
-    // we define players as vector to be able to vary the number of players at runtime
     // TODO expose number of players as input parameter
     assert_eq!(n_players, N_PLAYERS);
     let names = ["A", "B", "C", "D"];
@@ -192,6 +185,7 @@ impl Card {
         symbols.contains(&self.symbol)
     }
 
+    // TODO identify cards better so that we don't need to rely on this function
     fn is_equal_ignore_wild_color(&self, other: &Card) -> bool {
         match self.is_wild() {
             true => self.symbol == other.symbol,
@@ -311,6 +305,7 @@ impl Player {
 }
 
 fn remove_duplicates(cards: Cards) -> Cards {
+    // TODO remove duplicates
     cards
 }
 
@@ -330,7 +325,14 @@ impl PlayerCycle {
     /// Get next player.
     fn next(&mut self) -> &mut Player {
         let index = self.cycle.next().expect("no cycle values");
-        self.players.get_mut(index).expect("no players")
+        let player = self.players.get_mut(index).expect("no players");
+        println!(
+            "{:?} {:?} {:?}",
+            self.cycle.turn(),
+            player.name,
+            player.hand.len()
+        );
+        player
     }
 
     /// Reverse player cycle.
@@ -354,11 +356,6 @@ impl PlayerCycle {
         for (player, hand) in self.players.iter_mut().zip(hands.into_iter()) {
             player.take_cards(hand);
         }
-    }
-
-    /// Get turn number.
-    fn turn(&self) -> Turn {
-        self.cycle.turn()
     }
 }
 
@@ -550,14 +547,9 @@ mod tests {
         for card in first_cards.clone() {
             dealer.deck.push_back(card)
         }
-        println!("bdeck {:?}", dealer.deck);
-        println!("bpile {:?}", dealer.pile);
 
         assert!(dealer.pile.is_empty());
         dealer.flip_first_card();
-
-        println!("deck {:?}", dealer.deck);
-        println!("pile {:?}", dealer.pile);
 
         // check top card
         assert!(!dealer.top_card().is_wild());

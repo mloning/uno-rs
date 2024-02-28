@@ -1,4 +1,4 @@
-pub type Turn = u32;
+type Turn = u32;
 
 #[derive(Debug, Clone)]
 pub struct Cycle {
