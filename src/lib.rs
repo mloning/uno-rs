@@ -12,7 +12,6 @@ const N_INITIAL_CARDS: usize = 7; // number of cards in initial player hands
 const N_PLAYERS: usize = 4;
 
 // TODO split code into smaller files/modules
-// TODO add logging
 pub fn run() {
     // initialize player cycle
     let n_players = 4;
@@ -64,14 +63,15 @@ pub fn run() {
         if card.is_none() {
             let new_card = dealer.draw(1);
             card = player.play_from_cards(&top_card, new_card.clone());
+            // if the new card is not played, take it onto the hand
             if card.is_none() {
                 player.take_cards(new_card)
             }
         }
 
         // if card, discard and check game over
-        if card.is_some() {
-            dealer.discard(vec![card.expect("no card")]);
+        if let Some(card) = card {
+            dealer.discard(vec![card]);
             if game_over(player) {
                 println!("Player: {:?} won! Game over.", player.name);
                 break;
@@ -289,16 +289,13 @@ impl Player {
         let card = self.play_from_cards(top_card, cards);
 
         // remove card from hand
-        match card {
-            None => {}
-            Some(card) => {
-                let index = self
-                    .hand
-                    .iter()
-                    .position(|x| x.is_equal_ignore_wild_color(&card))
-                    .expect("selected card not in hand");
-                self.hand.remove(index);
-            }
+        if let Some(card) = card {
+            let index = self
+                .hand
+                .iter()
+                .position(|x| x.is_equal_ignore_wild_color(&card))
+                .expect("selected card not in hand");
+            self.hand.remove(index);
         }
         card
     }
@@ -326,6 +323,7 @@ impl PlayerCycle {
     fn next(&mut self) -> &mut Player {
         let index = self.cycle.next().expect("no cycle values");
         let player = self.players.get_mut(index).expect("no players");
+        // TODO add proper logging
         println!(
             "{:?} {:?} {:?}",
             self.cycle.turn(),
