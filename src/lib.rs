@@ -170,7 +170,7 @@ impl Card {
     }
 
     fn is_wild_draw_4(&self) -> bool {
-        self.symbol == "wild-draw-4s"
+        self.symbol == "wild-draw-4"
     }
 
     fn is_action(&self) -> bool {
@@ -553,12 +553,90 @@ mod tests {
         assert_eq!(dealer.deck.pop_front().unwrap(), wild_card);
     }
 
-    // TODO add more tests
     #[test]
-    fn test_filter_legal_cards() {
-        let cards = vec![Card::new("0", Some(Color::Red))];
+    fn test_filter_legal_cards_top_card_red_1() {
         let top_card = Card::new("1", Some(Color::Red));
+        let cards = vec![
+            // legal, same symbol
+            Card::new("1", Some(Color::Red)), // same card
+            Card::new("1", Some(Color::Blue)),
+            Card::new("1", Some(Color::Green)),
+            // legal, same color
+            Card::new("2", Some(Color::Red)),
+            Card::new("draw-2", Some(Color::Red)),
+            Card::new("skip", Some(Color::Red)),
+            // legal, wild
+            Card::new("wild", None),
+            // illegal
+            Card::new("0", Some(Color::Green)),
+            Card::new("3", Some(Color::Green)),
+            Card::new("wild-draw-4", None),
+        ];
         let legal_cards = filter_legal_cards(cards.clone(), top_card);
-        assert_eq!(legal_cards, cards);
+        assert_eq!(legal_cards, cards[..=6]);
+    }
+
+    #[test]
+    fn test_filter_legal_cards_top_card_blue_3() {
+        let top_card = Card::new("3", Some(Color::Blue));
+        let cards = vec![
+            // legal, same symbol
+            Card::new("3", Some(Color::Red)),
+            Card::new("3", Some(Color::Yellow)),
+            Card::new("3", Some(Color::Green)),
+            // legal, same color
+            Card::new("2", Some(Color::Blue)),
+            Card::new("draw-2", Some(Color::Blue)),
+            Card::new("skip", Some(Color::Blue)),
+            // legal, wild
+            Card::new("wild", None),
+            // illegal
+            Card::new("4", Some(Color::Green)),
+            Card::new("9", Some(Color::Yellow)),
+            Card::new("wild-draw-4", None),
+        ];
+        let legal_cards = filter_legal_cards(cards.clone(), top_card);
+        assert_eq!(legal_cards, cards[..=6]);
+    }
+
+    #[test]
+    fn test_filter_legal_cards_top_card_yellow_skip() {
+        let top_card = Card::new("skip", Some(Color::Yellow));
+        let cards = vec![
+            // legal, same symbol
+            Card::new("skip", Some(Color::Red)),
+            Card::new("skip", Some(Color::Yellow)),
+            Card::new("skip", Some(Color::Green)),
+            // legal, same color
+            Card::new("9", Some(Color::Yellow)),
+            Card::new("draw-2", Some(Color::Yellow)),
+            Card::new("skip", Some(Color::Yellow)), // same card
+            // legal, wild
+            Card::new("wild", None),
+            // illegal
+            Card::new("6", Some(Color::Green)),
+            Card::new("2", Some(Color::Red)),
+            Card::new("wild-draw-4", None),
+        ];
+        let legal_cards = filter_legal_cards(cards.clone(), top_card);
+        assert_eq!(legal_cards, cards[..=6]);
+    }
+
+    #[test]
+    fn test_filter_legal_cards_no_color_matches_wild_draw_4() {
+        let top_card = Card::new("0", Some(Color::Green));
+        let cards = vec![
+            // legal, same symbol
+            Card::new("0", Some(Color::Red)),
+            Card::new("0", Some(Color::Yellow)),
+            // legal, wild
+            Card::new("wild", None),
+            Card::new("wild-draw-4", None),
+            // illegal
+            Card::new("6", Some(Color::Blue)),
+            Card::new("2", Some(Color::Red)),
+        ];
+        let legal_cards = filter_legal_cards(cards.clone(), top_card);
+        assert_eq!(legal_cards, cards[..=3]);
     }
 }
