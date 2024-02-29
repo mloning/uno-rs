@@ -1,7 +1,10 @@
 mod cycle;
+use colored::ColoredString;
+use colored::Colorize;
 use cycle::Cycle;
 use rand::seq::SliceRandom;
 use std::collections::VecDeque;
+use std::fmt;
 use std::str;
 use std::vec::Vec;
 use strum::IntoEnumIterator; // import trait created by EnumIter macro into scope
@@ -11,6 +14,7 @@ const N_CARDS: usize = 108; // number of cards in standard deck
 const N_INITIAL_CARDS: usize = 7; // number of cards in initial player hands
 const N_PLAYERS: usize = 4;
 
+// TODO add proper logging
 // TODO split code into smaller files/modules
 pub fn run() {
     // initialize player cycle
@@ -165,7 +169,7 @@ fn randomly_shuffle_cards(mut cards: Cards) -> Cards {
 
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 struct Card {
     symbol: &'static str,
     color: Option<Color>,
@@ -198,10 +202,35 @@ impl Card {
     }
 }
 
+fn colorize(symbol: &'static str, color: Option<Color>) -> ColoredString {
+    match color {
+        None => symbol.white(),
+        Some(color) => match color {
+            Color::Red => symbol.red(),
+            Color::Blue => symbol.blue(),
+            Color::Green => symbol.green(),
+            Color::Yellow => symbol.yellow(),
+        },
+    }
+}
+
+impl fmt::Debug for Card {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", colorize(self.symbol, self.color))
+    }
+}
+
 // TODO distinguish between stateless ColorCard (symbol and color) and stateful WildCard,
 // or two structs for wild cards, one without color and one with color (symbol and optional color)
 // struct WildCard {
 //     symbol: &'static str,
+// }
+// enum Symbol {
+//     Number(u8),
+//     Skip,
+//     Reverse,
+//     Draw2,
+//     Draw4,
 // }
 //
 // impl WildCard {
