@@ -27,28 +27,29 @@ pub fn run() {
     dealer.flip_first_card();
 
     // set first card so that actions will be executed at the start of the game
-    let card = Some(dealer.top_card());
+    let mut card = Some(dealer.top_card());
 
     // cycle through players until game over
     loop {
-        // if action card, execute card action
+        // if action card was played, execute card action
+        println!("Played: {:?}", card);
         if let Some(card) = card {
-            if card.is_action() {
-                match card.symbol {
-                    "skip" => players.skip(),
-                    "reverse" => players.reverse(),
-                    "draw-2" => {
-                        let player = players.next();
-                        let cards = dealer.draw(2);
-                        player.take_cards(cards);
-                    }
-                    "wild-draw-4" => {
-                        let player = players.next();
-                        let cards = dealer.draw(4);
-                        player.take_cards(cards);
-                    }
-                    _ => panic!("invalid action card symbol"),
+            match card.symbol {
+                "skip" => players.skip(),
+                "reverse" => players.reverse(),
+                "draw-2" => {
+                    let player = players.next();
+                    let cards = dealer.draw(2);
+                    player.take_cards(cards);
+                    println!("Player: {:?} takes 2 cards", player.name);
                 }
+                "wild-draw-4" => {
+                    let player = players.next();
+                    let cards = dealer.draw(4);
+                    player.take_cards(cards);
+                    println!("Player: {:?} takes 4 cards", player.name);
+                }
+                _ => {}
             }
         }
 
@@ -57,12 +58,15 @@ pub fn run() {
 
         // try playing card from hand
         let top_card = dealer.top_card();
-        let mut card = player.play_from_hand(&top_card);
+        card = player.play_from_hand(&top_card);
+        println!("Played from hand: {:?}", card);
 
         // if no card is played, draw a new card and try playing it
         if card.is_none() {
             let new_card = dealer.draw(1);
+            println!("Drawn: {:?}", new_card);
             card = player.play_from_cards(&top_card, new_card.clone());
+            println!("Played from cards: {:?}", card);
             // if the new card is not played, take it onto the hand
             if card.is_none() {
                 player.take_cards(new_card)
@@ -180,10 +184,10 @@ impl Card {
         self.symbol == "wild-draw-4"
     }
 
-    fn is_action(&self) -> bool {
-        let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
-        symbols.contains(&self.symbol)
-    }
+    // fn is_action(&self) -> bool {
+    //     let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
+    //     symbols.contains(&self.symbol)
+    // }
 
     // TODO identify cards better so that we don't need to rely on this function
     fn is_equal_ignore_wild_color(&self, other: &Card) -> bool {
@@ -297,6 +301,12 @@ impl Player {
                 .expect("selected card not in hand");
             self.hand.remove(index);
         }
+
+        // say "uno" if one card left
+        if card.is_some() && self.hand.len() == 1 {
+            println!("Player {}: Uno!", self.name);
+        }
+
         card
     }
 }
@@ -323,24 +333,20 @@ impl PlayerCycle {
     fn next(&mut self) -> &mut Player {
         let index = self.cycle.next().expect("no cycle values");
         let player = self.players.get_mut(index).expect("no players");
-        // TODO add proper logging
-        println!(
-            "{:?} {:?} {:?}",
-            self.cycle.turn(),
-            player.name,
-            player.hand.len()
-        );
+        println!("Turn: {:?} - {:?}", self.cycle.turn(), player.name,);
         player
     }
 
     /// Reverse player cycle.
     fn reverse(&mut self) {
+        println!("Cycle reversed.");
         self.cycle.reverse();
     }
 
     /// Skip player.
     fn skip(&mut self) {
-        self.cycle.next();
+        let player = self.next();
+        println!("Player {:?} skipped", player.name);
     }
 
     /// Get player names.
