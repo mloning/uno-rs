@@ -23,6 +23,7 @@ Here are a few resources I found useful while writing the Uno game:
 * [SO answer on lifetimes](https://stackoverflow.com/a/70674633/9334962)
 * [The Rust Programming Language](https://doc.rust-lang.org/book/title-page.html)
 * [Programming Rust: Fast, Safe Systems Development](https://www.goodreads.com/book/show/25550614-programming-rust)
+* [Rustlings Coding Exercises](https://github.com/rust-lang/rustlings)
 
 ## Notes
 
@@ -30,7 +31,8 @@ State involves the following objects:
 
 * deck
 * pile 
-* player hand 
+* player hand
+* player cycle (current player and direction)
 * color for wild cards
 * potentially player strategy (play history of other players)
 
