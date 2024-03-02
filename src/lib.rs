@@ -2,6 +2,7 @@ mod cycle;
 use colored::ColoredString;
 use colored::Colorize;
 use cycle::Cycle;
+use itertools::Itertools;
 use rand::seq::SliceRandom;
 use std::collections::VecDeque;
 use std::fmt;
@@ -110,7 +111,7 @@ fn generate_players(n_players: usize) -> Players {
 }
 
 // EnumIter creates new type with implementation of iter method
-#[derive(Debug, Clone, Copy, EnumIter, PartialEq)]
+#[derive(Hash, Eq, Debug, Clone, Copy, EnumIter, PartialEq)]
 enum Color {
     Red,
     Blue,
@@ -168,7 +169,7 @@ fn randomly_shuffle_cards(mut cards: Cards) -> Cards {
 
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Hash, Copy, Clone, PartialEq, Eq)]
 struct Card {
     symbol: &'static str,
     color: Option<Color>,
@@ -333,8 +334,7 @@ impl Player {
 }
 
 fn remove_duplicates(cards: Cards) -> Cards {
-    // TODO remove duplicates
-    cards
+    cards.into_iter().unique().collect()
 }
 
 // define object for multiple players, handling player cycles
