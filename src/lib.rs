@@ -80,7 +80,7 @@ pub fn run() {
 
         // if card, discard and check game over
         if let Some(card) = card {
-            dealer.discard(vec![card]);
+            dealer.discard(card);
             if game_over(player) {
                 println!("Player: {:?} won! Game over.", player.name);
                 break;
@@ -472,25 +472,23 @@ impl Dealer {
     }
 
     /// Discard `cards` onto discard pile.
-    fn discard(&mut self, cards: Cards) {
-        // TODO change discard to take single Card instead of Vec<Card>
-        for card in cards.iter().filter(|x| x.is_wild()) {
-            debug_assert!(card.color.is_some());
-        }
-        self.pile.extend(cards);
+    fn discard(&mut self, card: Card) {
+        debug_assert!(card.color.is_some());
+        self.pile.push(card);
     }
 
     /// Flip first card of deck onto pile to start the game, discarding wild cards.
     fn flip_first_card(&mut self) {
         // if the card is a wild card, it is returned to the deck and a new card is drawn.
-        let cards = loop {
-            let cards = self.draw(1);
-            match cards.first().expect("no cards drawn").is_wild() {
-                true => self.refill_deck(cards),
-                false => break cards,
+        let card = loop {
+            // take first element of vector without copy, destroying vector
+            let card = self.draw(1).into_iter().nth(0).expect("no cards drawn");
+            match card.is_wild() {
+                true => self.refill_deck(vec![card]),
+                false => break card,
             }
         };
-        self.discard(cards);
+        self.discard(card);
     }
 
     /// Refill deck with `cards`.
@@ -612,10 +610,12 @@ mod tests {
         let mut _cards = dealer.draw(100);
 
         // set color for discard to work
-        for _card in _cards.iter_mut().filter(|x| x.is_wild()) {
-            _card.color = Some(select_random_color());
+        for mut _card in _cards.into_iter() {
+            if _card.is_wild() {
+                _card.color = Some(select_random_color());
+            }
+            dealer.discard(_card);
         }
-        dealer.discard(_cards);
         let n_available = dealer.deck.len();
 
         // draw more cards than remaining in deck
