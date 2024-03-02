@@ -120,7 +120,6 @@ enum Color {
 
 fn generate_deck() -> Deck {
     // TODO use generator to generate numbers
-    // TODO use enums for numbers/symbols?
     let numbers = [
         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "1", "2", "3", "4", "5", "6", "7", "8",
         "9",
@@ -188,11 +187,6 @@ impl Card {
         self.symbol == "wild-draw-4"
     }
 
-    // fn is_action(&self) -> bool {
-    //     let symbols = ["skip", "reverse", "draw-2", "wild-draw-4"];
-    //     symbols.contains(&self.symbol)
-    // }
-
     // TODO identify cards better so that we don't need to rely on this function
     fn is_equal_ignore_wild_color(&self, other: &Card) -> bool {
         match self.is_wild() {
@@ -202,7 +196,7 @@ impl Card {
     }
 }
 
-fn colorize(symbol: &'static str, color: Option<Color>) -> ColoredString {
+fn colorize_symbol(symbol: &'static str, color: Option<Color>) -> ColoredString {
     match color {
         None => symbol.white(),
         Some(color) => match color {
@@ -216,7 +210,7 @@ fn colorize(symbol: &'static str, color: Option<Color>) -> ColoredString {
 
 impl fmt::Debug for Card {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", colorize(self.symbol, self.color))
+        write!(f, "{}", colorize_symbol(self.symbol, self.color))
     }
 }
 
@@ -278,24 +272,22 @@ fn filter_legal_cards(cards: Cards, top_card: Card) -> Cards {
     legal_cards
 }
 
-// define object for a single player, encapsulating player state and strategy
-#[derive(Debug)]
+/// A single player, containing a name, the hand of cards, and a strategy how to play cards.
 struct Player {
     name: &'static str,
     hand: Cards,
-    // TODO should handle all objects implementing the strategy trait not just the
-    // specific random strategy
-    strategy: RandomStrategy,
+    strategy: Box<dyn Strategy>, // any object implementing the strategy trait
 }
 
 impl Player {
     fn new(name: &'static str) -> Self {
-        let hand: Cards = vec![];
+        // TODO expose strategy to constructor
         let strategy = RandomStrategy {};
+        let hand: Cards = vec![]; // start with empty hand
         Self {
             name,
             hand,
-            strategy,
+            strategy: Box::new(strategy),
         }
     }
 
@@ -392,13 +384,15 @@ impl PlayerCycle {
     }
 }
 
-// define strategy trait
+/// Strategy trait defining method for selecting a card to play.
 trait Strategy {
     /// Select card from `legal_cards`.
     // TODO pass on game state for enabling strategies to make smarter decisions
     fn select_card(&self, legal_cards: Cards) -> Option<Card>;
 }
 
+// TODO implement more strategies
+/// Random strategy.
 #[derive(Debug)]
 struct RandomStrategy {}
 
