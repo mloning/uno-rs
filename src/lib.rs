@@ -244,8 +244,8 @@ impl fmt::Debug for Card {
 // }
 
 fn filter_legal_cards(cards: Cards, top_card: Card) -> Cards {
-    assert!(!cards.is_empty());
-    assert!(top_card.color.is_some());
+    debug_assert!(!cards.is_empty());
+    debug_assert!(top_card.color.is_some());
 
     let n = cards.len();
     let mut legal_cards = Vec::with_capacity(n);
@@ -293,13 +293,13 @@ impl Player {
 
     /// Take `cards` into hand.
     fn take_cards(&mut self, cards: Cards) {
-        assert!(!cards.is_empty());
+        debug_assert!(!cards.is_empty());
         self.hand.extend(cards);
     }
 
     /// Play card from `playable_cards` if possible for given `top_card`.
     fn play_from_cards(&self, top_card: &Card, cards: Cards) -> Option<Card> {
-        assert!(!cards.is_empty());
+        debug_assert!(!cards.is_empty());
         let legal_cards = filter_legal_cards(cards, *top_card);
         let legal_cards = remove_duplicates(legal_cards);
         match legal_cards.is_empty() {
@@ -407,12 +407,12 @@ fn select_random_color() -> Color {
 impl Strategy for RandomStrategy {
     /// Randomly select card from `legal_cards`.
     fn select_card(&self, legal_cards: Cards) -> Option<Card> {
-        assert!(!legal_cards.is_empty());
+        debug_assert!(!legal_cards.is_empty());
         let mut rng = rand::thread_rng();
         let mut card = *legal_cards.choose(&mut rng).expect("empty legal cards");
         if card.is_wild() {
             // if wild card, select color
-            assert!(card.color.is_none());
+            debug_assert!(card.color.is_none());
             let color = select_random_color();
             card.color = Some(color);
         }
@@ -440,7 +440,7 @@ impl Dealer {
         let n_available = self.deck.len();
 
         // check there are enough cards in deck and pile
-        assert!(n_cards < (n_pile + n_available - 1));
+        debug_assert!(n_cards < (n_pile + n_available - 1));
 
         if n_cards <= n_available {
             // if enough cards are in the deck, simply draw cards
@@ -461,7 +461,7 @@ impl Dealer {
     // Draw `n_cards` from deck, without recycling pile.
     fn draw_from_deck(&mut self, n_cards: usize) -> Cards {
         let n_available = self.deck.len();
-        assert!(
+        debug_assert!(
             n_available >= n_cards,
             "n_available: {}, n_cards: {}",
             n_available,
@@ -475,7 +475,7 @@ impl Dealer {
     fn discard(&mut self, cards: Cards) {
         // TODO change discard to take single Card instead of Vec<Card>
         for card in cards.iter().filter(|x| x.is_wild()) {
-            assert!(card.color.is_some());
+            debug_assert!(card.color.is_some());
         }
         self.pile.extend(cards);
     }
@@ -507,7 +507,7 @@ impl Dealer {
     /// Recyle all cards except top card from discard pile into deck.
     fn recycle_pile(&mut self) {
         let n = self.pile.len();
-        assert!(n > 0); // pile must have at least one card
+        debug_assert!(n > 0); // pile must have at least one card
         let end = self.pile.len() - 1; // keep top card
         let mut cards = self.pile.drain(0..end).collect();
         cards = randomly_shuffle_cards(cards);
