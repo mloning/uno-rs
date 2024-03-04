@@ -386,7 +386,7 @@ impl PlayerCycle {
 /// Strategy trait defining method for selecting a card to play.
 trait Strategy {
     /// Select card from `legal_cards`.
-    // TODO pass on game state for enabling strategies to make smarter decisions
+    // TODO pass on game history for enabling strategies to make smarter decisions
     fn select_card(&self, legal_cards: Cards) -> Option<Card>;
 }
 
