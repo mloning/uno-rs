@@ -16,7 +16,6 @@ const N_INITIAL_CARDS: usize = 7; // number of cards in initial player hands
 const N_PLAYERS: usize = 4;
 
 // TODO add proper logging
-// TODO split code into smaller files/modules
 pub fn run() {
     // initialize player cycle
     let n_players = 4;
