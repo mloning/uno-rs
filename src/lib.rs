@@ -31,13 +31,13 @@ pub fn run() {
     dealer.flip_first_card();
 
     // set first card so that actions will be executed at the start of the game
-    let mut card = Some(dealer.top_card());
+    let mut play = Some(dealer.top_card());
 
     // cycle through players until game over
     loop {
         // if action card was played, execute card action
-        println!("Played: {:?}", card);
-        if let Some(card) = card {
+        println!("Played: {}", fmt_play(&play));
+        if let Some(card) = play {
             match card.symbol {
                 Symbol::Skip => players.skip(),
                 Symbol::Reverse => players.reverse(),
@@ -45,13 +45,13 @@ pub fn run() {
                     let player = players.next();
                     let cards = dealer.draw(2);
                     player.take_cards(cards);
-                    println!("Player: {:?} takes 2 cards", player.name);
+                    println!("Player: {} takes 2 cards", player.name);
                 }
                 Symbol::WildDraw4 => {
                     let player = players.next();
                     let cards = dealer.draw(4);
                     player.take_cards(cards);
-                    println!("Player: {:?} takes 4 cards", player.name);
+                    println!("Player: {} takes 4 cards", player.name);
                 }
                 _ => {}
             }
@@ -62,26 +62,26 @@ pub fn run() {
 
         // try playing card from hand
         let top_card = dealer.top_card();
-        card = player.play_from_hand(&top_card);
-        println!("Played from hand: {:?}", card);
+        play = player.play_from_hand(&top_card);
+        println!("Played from hand: {}", fmt_play(&play));
 
         // if no card is played, draw a new card and try playing it
-        if card.is_none() {
+        if play.is_none() {
             let new_card = dealer.draw(1);
-            println!("Drawn: {:?}", new_card);
-            card = player.play_from_cards(&top_card, new_card.clone());
-            println!("Played from cards: {:?}", card);
+            println!("Drawn: {}", fmt_card(&new_card[0]));
+            play = player.play_from_cards(&top_card, new_card.clone());
+            println!("Played from cards: {}", fmt_play(&play));
             // if the new card is not played, take it onto the hand
-            if card.is_none() {
+            if play.is_none() {
                 player.take_cards(new_card)
             }
         }
 
         // if card, discard and check game over
-        if let Some(card) = card {
+        if let Some(card) = play {
             dealer.discard(card);
             if game_over(player) {
-                println!("Player: {:?} won! Game over.", player.name);
+                println!("Player: {} won! Game over.", player.name);
                 break;
             }
         }
@@ -96,6 +96,7 @@ fn game_over(player: &Player) -> bool {
 type Cards = Vec<Card>;
 type Players = Vec<Player>;
 type Deck = VecDeque<Card>;
+type Play = Option<Card>;
 
 fn generate_players(n_players: usize) -> Players {
     // TODO expose number of players as input parameter
@@ -227,13 +228,18 @@ impl Card {
 
 impl fmt::Debug for Card {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", colorize_symbol(self.symbol, self.color))
+        write!(f, "{}", fmt_card(self))
     }
 }
 
-fn colorize_symbol(symbol: Symbol, color: Option<Color>) -> ColoredString {
-    let symbol = symbol.to_string();
-    match color {
+fn fmt_card(card: &Card) -> ColoredString {
+    // remove Number wrapper when printing
+    let symbol = match card.symbol {
+        Symbol::Number(number) => number.to_string(),
+        _ => card.symbol.to_string(),
+    };
+
+    match card.color {
         None => symbol.white(),
         Some(color) => match color {
             Color::Red => symbol.red(),
@@ -241,6 +247,13 @@ fn colorize_symbol(symbol: Symbol, color: Option<Color>) -> ColoredString {
             Color::Green => symbol.green(),
             Color::Yellow => symbol.yellow(),
         },
+    }
+}
+
+fn fmt_play(play: &Play) -> ColoredString {
+    match play {
+        Some(card) => fmt_card(card),
+        None => String::from("None").white(),
     }
 }
 
@@ -299,7 +312,7 @@ impl Player {
     }
 
     /// Play card from `playable_cards` if possible for given `top_card`.
-    fn play_from_cards(&self, top_card: &Card, cards: Cards) -> Option<Card> {
+    fn play_from_cards(&self, top_card: &Card, cards: Cards) -> Play {
         debug_assert!(!cards.is_empty());
         let legal_cards = filter_legal_cards(cards, *top_card);
         let legal_cards = remove_duplicates(legal_cards);
@@ -310,7 +323,7 @@ impl Player {
     }
 
     /// Play card from hand if possible for given `top_card`.
-    fn play_from_hand(&mut self, top_card: &Card) -> Option<Card> {
+    fn play_from_hand(&mut self, top_card: &Card) -> Play {
         let cards = self.hand.clone();
         let card = self.play_from_cards(top_card, cards);
 
@@ -326,7 +339,7 @@ impl Player {
 
         // say "uno" if one card left
         if card.is_some() && self.hand.len() == 1 {
-            println!("Player {}: Uno!", self.name);
+            println!("Player {:?}: Uno!", self.name);
         }
 
         card
@@ -354,20 +367,20 @@ impl PlayerCycle {
     fn next(&mut self) -> &mut Player {
         let index = self.cycle.next().expect("no cycle values");
         let player = self.players.get_mut(index).expect("no players");
-        println!("Turn: {:?} {:?}", self.cycle.turn(), player.name,);
+        println!("Turn: {} | Player: {}", self.cycle.turn(), player.name,);
         player
     }
 
     /// Reverse player cycle.
     fn reverse(&mut self) {
-        println!("Cycle reversed.");
+        println!("Player cycle reversed.");
         self.cycle.reverse();
     }
 
     /// Skip player.
     fn skip(&mut self) {
         let player = self.next();
-        println!("Player {:?} skipped", player.name);
+        println!("Player: {} skipped", player.name);
     }
 
     /// Get player names.
@@ -388,7 +401,7 @@ impl PlayerCycle {
 trait Strategy {
     /// Select card from `legal_cards`.
     // TODO pass on play history for enabling strategies to make smarter decisions
-    fn select_card(&self, legal_cards: Cards) -> Option<Card>;
+    fn select_card(&self, legal_cards: Cards) -> Play;
 }
 
 // TODO implement more strategies
@@ -406,7 +419,7 @@ fn select_random_color() -> Color {
 
 impl Strategy for RandomStrategy {
     /// Randomly select card from `legal_cards`.
-    fn select_card(&self, legal_cards: Cards) -> Option<Card> {
+    fn select_card(&self, legal_cards: Cards) -> Play {
         debug_assert!(!legal_cards.is_empty());
         let mut rng = rand::thread_rng();
         let mut card = *legal_cards.choose(&mut rng).expect("empty legal cards");
