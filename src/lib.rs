@@ -39,15 +39,15 @@ pub fn run() {
         println!("Played: {:?}", card);
         if let Some(card) = card {
             match card.symbol {
-                "skip" => players.skip(),
-                "reverse" => players.reverse(),
-                "draw-2" => {
+                Symbol::Skip => players.skip(),
+                Symbol::Reverse => players.reverse(),
+                Symbol::Draw2 => {
                     let player = players.next();
                     let cards = dealer.draw(2);
                     player.take_cards(cards);
                     println!("Player: {:?} takes 2 cards", player.name);
                 }
-                "wild-draw-4" => {
+                Symbol::WildDraw4 => {
                     let player = players.next();
                     let cards = dealer.draw(4);
                     player.take_cards(cards);
@@ -119,36 +119,52 @@ enum Color {
 }
 
 fn generate_deck() -> Deck {
-    // TODO use generator to generate numbers
-    let numbers = [
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "1", "2", "3", "4", "5", "6", "7", "8",
-        "9",
+    let numbers: [u8; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let color_symbols: [Symbol; 6] = [
+        Symbol::Draw2,
+        Symbol::Draw2,
+        Symbol::Reverse,
+        Symbol::Reverse,
+        Symbol::Skip,
+        Symbol::Skip,
     ];
-    let symbols = ["skip", "skip", "reverse", "reverse", "draw-2", "draw-2"];
-    let wild_symbols = [
-        "wild",
-        "wild",
-        "wild",
-        "wild",
-        "wild-draw-4",
-        "wild-draw-4",
-        "wild-draw-4",
-        "wild-draw-4",
+    let wild_symbols: [Symbol; 8] = [
+        Symbol::Wild,
+        Symbol::Wild,
+        Symbol::Wild,
+        Symbol::Wild,
+        Symbol::WildDraw4,
+        Symbol::WildDraw4,
+        Symbol::WildDraw4,
+        Symbol::WildDraw4,
     ];
 
     let mut cards: Cards = Vec::with_capacity(N_CARDS);
+
+    // color cards
     for color in Color::iter() {
-        for number in numbers.iter() {
-            let card = Card::new(number, Some(color));
+        for number in numbers.into_iter() {
+            let card = Card {
+                symbol: Symbol::Number(number),
+                color: Some(color),
+            };
             cards.push(card);
         }
-        for symbol in symbols.iter() {
-            let card = Card::new(symbol, Some(color));
+        for symbol in color_symbols.into_iter() {
+            let card = Card {
+                symbol,
+                color: Some(color),
+            };
             cards.push(card);
         }
     }
-    for wild_symbol in wild_symbols.iter() {
-        let card = Card::new(wild_symbol, None);
+
+    // wild cards
+    for symbol in wild_symbols.into_iter() {
+        let card = Card {
+            symbol,
+            color: None,
+        };
         cards.push(card);
     }
 
@@ -166,25 +182,38 @@ fn randomly_shuffle_cards(mut cards: Cards) -> Cards {
     cards
 }
 
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
+enum Symbol {
+    Number(u8),
+    Skip,
+    Reverse,
+    Draw2,
+    Wild,
+    WildDraw4,
+}
+
+// add display trait to convert symbol enum values to string using `to_string`
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 // define card object, with optional color field to handle wild cards where
 // color is chosen by player when the card is played
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 struct Card {
-    symbol: &'static str,
+    symbol: Symbol,
     color: Option<Color>,
 }
 
 impl Card {
-    fn new(symbol: &'static str, color: Option<Color>) -> Self {
-        Self { symbol, color }
-    }
-
     fn is_wild(&self) -> bool {
-        self.symbol.starts_with("wild")
+        matches!(self.symbol, Symbol::Wild | Symbol::WildDraw4)
     }
 
     fn is_wild_draw_4(&self) -> bool {
-        self.symbol == "wild-draw-4"
+        matches!(self.symbol, Symbol::WildDraw4)
     }
 
     // TODO identify cards better so that we don't need to rely on this function
@@ -196,7 +225,14 @@ impl Card {
     }
 }
 
-fn colorize_symbol(symbol: &'static str, color: Option<Color>) -> ColoredString {
+impl fmt::Debug for Card {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", colorize_symbol(self.symbol, self.color))
+    }
+}
+
+fn colorize_symbol(symbol: Symbol, color: Option<Color>) -> ColoredString {
+    let symbol = symbol.to_string();
     match color {
         None => symbol.white(),
         Some(color) => match color {
@@ -207,41 +243,6 @@ fn colorize_symbol(symbol: &'static str, color: Option<Color>) -> ColoredString 
         },
     }
 }
-
-impl fmt::Debug for Card {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", colorize_symbol(self.symbol, self.color))
-    }
-}
-
-// TODO distinguish between stateless ColorCard (symbol and color) and stateful WildCard,
-// or two structs for wild cards, one without color and one with color (symbol and optional color)
-// struct WildCard {
-//     symbol: &'static str,
-// }
-// enum Symbol {
-//     Number(u8),
-//     Skip,
-//     Reverse,
-//     Draw2,
-//     Draw4,
-// }
-//
-// impl WildCard {
-//     fn set_color(&'static self, color: Color) -> SetWildCard {
-//         SetWildCard {
-//             card: self,
-//             symbol: self.symbol,
-//             color,
-//         }
-//     }
-// }
-//
-// struct SetWildCard {
-//     card: &'static WildCard,
-//     symbol: &'static str,
-//     color: Color,
-// }
 
 fn filter_legal_cards(cards: Cards, top_card: Card) -> Cards {
     debug_assert!(!cards.is_empty());
@@ -353,7 +354,7 @@ impl PlayerCycle {
     fn next(&mut self) -> &mut Player {
         let index = self.cycle.next().expect("no cycle values");
         let player = self.players.get_mut(index).expect("no players");
-        println!("Turn: {:?} - {:?}", self.cycle.turn(), player.name,);
+        println!("Turn: {:?} {:?}", self.cycle.turn(), player.name,);
         player
     }
 
@@ -386,7 +387,7 @@ impl PlayerCycle {
 /// Strategy trait defining method for selecting a card to play.
 trait Strategy {
     /// Select card from `legal_cards`.
-    // TODO pass on game history for enabling strategies to make smarter decisions
+    // TODO pass on play history for enabling strategies to make smarter decisions
     fn select_card(&self, legal_cards: Cards) -> Option<Card>;
 }
 
@@ -545,6 +546,17 @@ mod tests {
         assert_eq!(deck.len(), N_CARDS);
     }
 
+    // helper function for testing to generate cards
+    fn generate_cards(values: Vec<(Symbol, Option<Color>)>) -> Cards {
+        let n = values.len();
+        let mut cards = Vec::with_capacity(n);
+        for (symbol, color) in values.into_iter() {
+            let card = Card { symbol, color };
+            cards.push(card);
+        }
+        cards
+    }
+
     #[test]
     fn test_dealer_flip_first_card() {
         let mut dealer = Dealer::new();
@@ -563,11 +575,11 @@ mod tests {
         let mut dealer = Dealer::new();
 
         // add wild cards to back of deck
-        let first_cards = vec![
-            Card::new("0", Some(Color::Red)),
-            Card::new("wild", None),
-            Card::new("wild-draw-4", None),
-        ];
+        let first_cards = generate_cards(vec![
+            (Symbol::Number(0), Some(Color::Red)),
+            (Symbol::Wild, None),
+            (Symbol::WildDraw4, None),
+        ]);
         for card in first_cards.clone() {
             dealer.deck.push_back(card)
         }
@@ -628,87 +640,100 @@ mod tests {
 
     #[test]
     fn test_filter_legal_cards_top_card_red_1() {
-        let top_card = Card::new("1", Some(Color::Red));
-        let cards = vec![
+        let top_card = Card {
+            symbol: Symbol::Number(1),
+            color: Some(Color::Red),
+        };
+
+        let cards = generate_cards(vec![
             // legal, same symbol
-            Card::new("1", Some(Color::Red)), // same card
-            Card::new("1", Some(Color::Blue)),
-            Card::new("1", Some(Color::Green)),
+            (Symbol::Number(1), Some(Color::Red)), // same card
+            (Symbol::Number(1), Some(Color::Blue)),
+            (Symbol::Number(1), Some(Color::Green)),
             // legal, same color
-            Card::new("2", Some(Color::Red)),
-            Card::new("draw-2", Some(Color::Red)),
-            Card::new("skip", Some(Color::Red)),
+            (Symbol::Number(2), Some(Color::Red)),
+            (Symbol::Draw2, Some(Color::Red)),
+            (Symbol::Skip, Some(Color::Red)),
             // legal, wild
-            Card::new("wild", None),
+            (Symbol::Wild, None),
             // illegal
-            Card::new("0", Some(Color::Green)),
-            Card::new("3", Some(Color::Green)),
-            Card::new("wild-draw-4", None),
-        ];
+            (Symbol::Number(0), Some(Color::Green)),
+            (Symbol::Number(3), Some(Color::Green)),
+            (Symbol::WildDraw4, None),
+        ]);
         let legal_cards = filter_legal_cards(cards.clone(), top_card);
         assert_eq!(legal_cards, cards[..=6]);
     }
 
     #[test]
     fn test_filter_legal_cards_top_card_blue_3() {
-        let top_card = Card::new("3", Some(Color::Blue));
-        let cards = vec![
+        let top_card = Card {
+            symbol: Symbol::Number(3),
+            color: Some(Color::Blue),
+        };
+        let cards = generate_cards(vec![
             // legal, same symbol
-            Card::new("3", Some(Color::Red)),
-            Card::new("3", Some(Color::Yellow)),
-            Card::new("3", Some(Color::Green)),
+            (Symbol::Number(3), Some(Color::Red)),
+            (Symbol::Number(3), Some(Color::Yellow)),
+            (Symbol::Number(3), Some(Color::Green)),
             // legal, same color
-            Card::new("2", Some(Color::Blue)),
-            Card::new("draw-2", Some(Color::Blue)),
-            Card::new("skip", Some(Color::Blue)),
+            (Symbol::Number(2), Some(Color::Blue)),
+            (Symbol::Draw2, Some(Color::Blue)),
+            (Symbol::Skip, Some(Color::Blue)),
             // legal, wild
-            Card::new("wild", None),
+            (Symbol::Wild, None),
             // illegal
-            Card::new("4", Some(Color::Green)),
-            Card::new("9", Some(Color::Yellow)),
-            Card::new("wild-draw-4", None),
-        ];
+            (Symbol::Number(4), Some(Color::Green)),
+            (Symbol::Number(9), Some(Color::Yellow)),
+            (Symbol::WildDraw4, None),
+        ]);
         let legal_cards = filter_legal_cards(cards.clone(), top_card);
         assert_eq!(legal_cards, cards[..=6]);
     }
 
     #[test]
     fn test_filter_legal_cards_top_card_yellow_skip() {
-        let top_card = Card::new("skip", Some(Color::Yellow));
-        let cards = vec![
+        let top_card = Card {
+            symbol: Symbol::Skip,
+            color: Some(Color::Yellow),
+        };
+        let cards = generate_cards(vec![
             // legal, same symbol
-            Card::new("skip", Some(Color::Red)),
-            Card::new("skip", Some(Color::Yellow)),
-            Card::new("skip", Some(Color::Green)),
+            (Symbol::Skip, Some(Color::Red)),
+            (Symbol::Skip, Some(Color::Yellow)),
+            (Symbol::Skip, Some(Color::Green)),
             // legal, same color
-            Card::new("9", Some(Color::Yellow)),
-            Card::new("draw-2", Some(Color::Yellow)),
-            Card::new("skip", Some(Color::Yellow)), // same card
+            (Symbol::Number(9), Some(Color::Yellow)),
+            (Symbol::Draw2, Some(Color::Yellow)),
+            (Symbol::Skip, Some(Color::Yellow)), // same card
             // legal, wild
-            Card::new("wild", None),
+            (Symbol::Wild, None),
             // illegal
-            Card::new("6", Some(Color::Green)),
-            Card::new("2", Some(Color::Red)),
-            Card::new("wild-draw-4", None),
-        ];
+            (Symbol::Number(6), Some(Color::Green)),
+            (Symbol::Number(2), Some(Color::Red)),
+            (Symbol::WildDraw4, None),
+        ]);
         let legal_cards = filter_legal_cards(cards.clone(), top_card);
         assert_eq!(legal_cards, cards[..=6]);
     }
 
     #[test]
     fn test_filter_legal_cards_no_color_matches_wild_draw_4() {
-        let top_card = Card::new("0", Some(Color::Green));
-        let cards = vec![
+        let top_card = Card {
+            symbol: Symbol::Number(0),
+            color: Some(Color::Green),
+        };
+        let cards = generate_cards(vec![
             // legal, same symbol
-            Card::new("0", Some(Color::Red)),
-            Card::new("0", Some(Color::Yellow)),
+            (Symbol::Number(0), Some(Color::Red)),
+            (Symbol::Number(0), Some(Color::Yellow)),
             // legal, wild
-            Card::new("wild", None),
-            Card::new("wild-draw-4", None),
+            (Symbol::Wild, None),
+            (Symbol::WildDraw4, None),
             // illegal
-            Card::new("6", Some(Color::Blue)),
-            Card::new("2", Some(Color::Red)),
-        ];
+            (Symbol::Number(6), Some(Color::Blue)),
+            (Symbol::Number(2), Some(Color::Red)),
+        ]);
         let legal_cards = filter_legal_cards(cards.clone(), top_card);
         assert_eq!(legal_cards, cards[..=3]);
     }
